@@ -49,7 +49,7 @@ export function SubtitleWorkspace({
       <div className="mt-5 flex flex-col gap-4">
         {items.length === 0 ? (
           <article className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-500">
-            点击“开始模拟”后，这里会滚动显示最近两组英中对应字幕。
+            点击“开始模拟”或切到 Cloud ASR 模式后开始实时输入，这里会滚动显示最近两组英中对应字幕。
           </article>
         ) : null}
 

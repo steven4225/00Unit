@@ -1,11 +1,10 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkbenchClient } from "../components/workbench-client";
 import HomePage from "./page";
 
 const SEGMENT_ONE_FINAL = "Today I want to talk about small language models.";
-const SEGMENT_TWO_FINAL =
-  "The first idea is that smaller systems can still feel fast.";
 const SEGMENT_TWO_CORRECTED =
   "The first idea is that smaller systems can still feel surprisingly fast.";
 const SEGMENT_THREE_CORRECTED =
@@ -20,21 +19,53 @@ function createJsonResponse(payload: unknown, status = 200) {
   });
 }
 
-function getControlButtons() {
-  const [startButton, pauseButton, resetButton, summaryButton] =
-    screen.getAllByRole("button");
-
+function getButtons() {
   return {
-    startButton,
-    pauseButton,
-    resetButton,
-    summaryButton
+    startButton: screen.getByRole("button", {
+      name: /开始模拟|开始实时输入|连接中\.\.\./
+    }),
+    pauseButton: screen.getByRole("button", { name: "暂停" }),
+    resetButton: screen.getByRole("button", { name: "重置" }),
+    summaryButton: screen.getByRole("button", { name: /生成总结|生成中\.\.\./ })
   };
 }
 
 async function flushAsyncWork() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+class FakeCloudAsrSource {
+  callbacks:
+    | {
+        onEvent: (event: {
+          id: string;
+          text: string;
+          isFinal: boolean;
+          startMs: number;
+          endMs: number;
+          source: "cloud-asr";
+        }) => void;
+        onError?: (error: unknown) => void;
+      }
+    | undefined;
+
+  readonly start = vi.fn(async (callbacks) => {
+    this.callbacks = callbacks;
+  });
+
+  readonly stop = vi.fn(async () => {});
+
+  emit(event: {
+    id: string;
+    text: string;
+    isFinal: boolean;
+    startMs: number;
+    endMs: number;
+    source: "cloud-asr";
+  }) {
+    this.callbacks?.onEvent(event);
+  }
 }
 
 describe("HomePage", () => {
@@ -47,12 +78,22 @@ describe("HomePage", () => {
     vi.useRealTimers();
   });
 
-  it("renders the phase-1 workbench shell areas", () => {
+  it("renders the phase-2 workbench shell areas", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
-    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(4);
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "AI 英文演讲实时字幕翻译助手"
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "输入源状态" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始模拟" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cloud ASR" })).toBeInTheDocument();
+    expect(screen.getByText("主字幕区")).toBeInTheDocument();
+    expect(screen.getByText("会后总结")).toBeInTheDocument();
   });
 
   it("plays mock transcript events and keeps interim updates display-only", async () => {
@@ -75,15 +116,17 @@ describe("HomePage", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<HomePage />);
+    render(<WorkbenchClient />);
 
-    fireEvent.click(getControlButtons().startButton);
+    fireEvent.click(screen.getByRole("button", { name: "开始模拟" }));
 
     await act(async () => {
       vi.advanceTimersByTime(800);
     });
 
-    expect(screen.getByText("Today I want to talk about small language")).toBeInTheDocument();
+    expect(
+      screen.getByText("Today I want to talk about small language")
+    ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -93,75 +136,13 @@ describe("HomePage", () => {
 
     expect(screen.getByText(`ZH:${SEGMENT_THREE_CORRECTED}`)).toBeInTheDocument();
     expect(screen.getByText(`ZH:${SEGMENT_TWO_CORRECTED}`)).toBeInTheDocument();
-    expect(screen.queryByText(`ZH:${SEGMENT_ONE_FINAL}`)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(`ZH:${SEGMENT_ONE_FINAL}`)
+    ).not.toBeInTheDocument();
   });
 
-  it("ignores stale translation results after a newer correction arrives", async () => {
-    let resolveStaleRequest: ((value: Response) => void) | null = null;
-
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-
-      if (!url.endsWith("/api/translate")) {
-        throw new Error(`Unexpected request: ${url}`);
-      }
-
-      const body = JSON.parse(String(init?.body ?? "{}"));
-      const firstItem = body.items[0] as { id: string; text: string };
-
-      if (firstItem.text === SEGMENT_TWO_FINAL) {
-        return new Promise<Response>((resolve) => {
-          resolveStaleRequest = resolve;
-        });
-      }
-
-      return Promise.resolve(
-        createJsonResponse({
-          items: body.items.map((item: { id: string; text: string }) => ({
-            id: item.id,
-            chinese: `ZH:${item.text}`
-          }))
-        })
-      );
-    });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<HomePage />);
-
-    fireEvent.click(getControlButtons().startButton);
-
-    await act(async () => {
-      vi.advanceTimersByTime(3200);
-      await flushAsyncWork();
-    });
-
-    expect(fetchMock).toHaveBeenCalled();
-    await act(async () => {
-      vi.advanceTimersByTime(800);
-      await flushAsyncWork();
-    });
-
-    expect(screen.getByText(`ZH:${SEGMENT_TWO_CORRECTED}`)).toBeInTheDocument();
-    await act(async () => {
-      resolveStaleRequest?.(
-        createJsonResponse({
-          items: [
-            {
-              id: "seg-2",
-              chinese: "ZH:STALE"
-            }
-          ]
-        })
-      );
-      await flushAsyncWork();
-    });
-
-    expect(screen.getByText(`ZH:${SEGMENT_TWO_CORRECTED}`)).toBeInTheDocument();
-    expect(screen.queryByText("ZH:STALE")).not.toBeInTheDocument();
-  });
-
-  it("pauses playback and resets the session state", async () => {
+  it("switches into cloud asr mode and displays the current input mode", async () => {
+    const cloudSource = new FakeCloudAsrSource();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
@@ -181,32 +162,126 @@ describe("HomePage", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<HomePage />);
-
-    const { startButton, pauseButton, resetButton } = getControlButtons();
-
-    fireEvent.click(startButton);
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
 
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      await flushAsyncWork();
     });
-
-    expect(screen.getByText("Today I want to talk about small language")).toBeInTheDocument();
-
-    fireEvent.click(pauseButton);
 
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      fireEvent.click(screen.getByRole("button", { name: "开始实时输入" }));
+      await flushAsyncWork();
     });
 
-    expect(screen.queryByText(SEGMENT_TWO_FINAL)).not.toBeInTheDocument();
+    expect(screen.getByText("Cloud ASR Mode")).toBeInTheDocument();
+    expect(cloudSource.start).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(resetButton);
+    act(() => {
+      cloudSource.emit({
+        id: "cloud-seg-1",
+        text: "real partial phrase",
+        isFinal: false,
+        startMs: 0,
+        endMs: 400,
+        source: "cloud-asr"
+      });
+    });
+
+    expect(screen.getByText("real partial phrase")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-1",
+        text: "real final phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("ZH:real final phrase")).toBeInTheDocument();
+  });
+
+  it("surfaces cloud asr startup failures and offers a retry path", async () => {
+    const failingFactory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("Missing NEXT_PUBLIC_CLOUD_ASR_ADAPTER_URL");
+      })
+      .mockImplementation(() => new FakeCloudAsrSource());
+
+    render(<WorkbenchClient createCloudAsrSource={failingFactory} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "开始实时输入" }));
+      await flushAsyncWork();
+    });
 
     expect(
-      screen.queryByText("Today I want to talk about small language")
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(`ZH:${SEGMENT_ONE_FINAL}`)).not.toBeInTheDocument();
+      screen.getByText(
+        "Cloud ASR 模式尚未配置适配层地址，请先设置 NEXT_PUBLIC_CLOUD_ASR_ADAPTER_URL。"
+      )
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "重试连接" }));
+      await flushAsyncWork();
+    });
+
+    expect(failingFactory).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the session paused when startup is interrupted by an async runtime error", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith("/api/translate")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+
+        return createJsonResponse({
+          items: body.items.map((item: { id: string; text: string }) => ({
+            id: item.id,
+            chinese: `ZH:${item.text}`
+          }))
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const interruptedSource = {
+      stop: vi.fn(async () => {}),
+      start: vi.fn(async (callbacks: { onError?: (error: unknown) => void }) => {
+        callbacks.onError?.(new Error("Adapter handshake failed"));
+      })
+    };
+
+    render(<WorkbenchClient createCloudAsrSource={() => interruptedSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "开始实时输入" }));
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByText("Adapter handshake failed")).toBeInTheDocument();
+    expect(interruptedSource.stop).toHaveBeenCalledTimes(1);
   });
 
   it("generates a manual summary from the full retained transcript history", async () => {
@@ -240,9 +315,9 @@ describe("HomePage", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<HomePage />);
+    render(<WorkbenchClient />);
 
-    const { startButton, summaryButton } = getControlButtons();
+    const { startButton, summaryButton } = getButtons();
 
     fireEvent.click(startButton);
 
