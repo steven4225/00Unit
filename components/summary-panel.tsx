@@ -22,7 +22,9 @@ export function SummaryPanel({
           : "在这个区域里，系统会基于当前完整英文稿输出中文摘要。";
 
   const keywords =
-    status === "ready" && summary ? summary.keywords : ["small models", "translation", "correction"];
+    status === "ready" && summary
+      ? summary.keywords
+      : ["small models", "translation", "correction"];
 
   const uncertainTerms =
     status === "ready" && summary
