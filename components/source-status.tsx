@@ -1,6 +1,14 @@
 import React from "react";
 
-export function SourceStatus() {
+type SourceStatusProps = {
+  sourceLabel: string;
+  statusDetail: string;
+};
+
+export function SourceStatus({
+  sourceLabel,
+  statusDetail
+}: SourceStatusProps) {
   return (
     <section
       aria-labelledby="source-status-title"
@@ -22,7 +30,9 @@ export function SourceStatus() {
 
         <div className="inline-flex items-center gap-3 rounded-full border border-amber-200 bg-white/80 px-4 py-2 text-sm text-slate-700">
           <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-          Mock Source Standby
+          <span>{sourceLabel}</span>
+          <span className="text-slate-400">·</span>
+          <span>{statusDetail}</span>
         </div>
       </div>
     </section>

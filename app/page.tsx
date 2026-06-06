@@ -1,8 +1,5 @@
 import React from "react";
-import { ControlBar } from "../components/control-bar";
-import { SourceStatus } from "../components/source-status";
-import { SubtitleWorkspace } from "../components/subtitle-workspace";
-import { SummaryPanel } from "../components/summary-panel";
+import { WorkbenchClient } from "../components/workbench-client";
 
 export default function HomePage() {
   return (
@@ -11,7 +8,7 @@ export default function HomePage() {
         <section className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="border-b border-slate-200/80 px-6 py-6 md:px-8">
             <p className="text-sm font-medium uppercase tracking-[0.24em] text-amber-700">
-              Phase-1 Workbench Shell
+              Phase-1 Workbench
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
               AI 英文演讲实时字幕翻译助手
@@ -21,14 +18,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid gap-6 px-6 py-6 md:px-8 md:py-8 lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
-            <div className="flex flex-col gap-6">
-              <SourceStatus />
-              <ControlBar />
-              <SubtitleWorkspace />
-            </div>
-            <SummaryPanel />
-          </div>
+          <WorkbenchClient />
         </section>
       </div>
     </main>
