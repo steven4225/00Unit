@@ -1,19 +1,23 @@
 import React from "react";
+import type { SubtitleItem } from "../lib/schemas/transcript";
 
-const sampleSegments = [
-  {
-    status: "上一句",
-    english: "Today I want to talk about small language models in real products.",
-    chinese: "今天我想谈谈小型语言模型在真实产品中的应用。"
-  },
-  {
-    status: "当前句",
-    english: "The goal is to keep translation readable even when a recent phrase gets corrected.",
-    chinese: "目标是在最近一句发生修正时，仍然让翻译保持稳定可读。"
-  }
-] as const;
+type SubtitleWorkspaceProps = {
+  items: SubtitleItem[];
+  isTranslating: boolean;
+  errorMessage: string | null;
+};
 
-export function SubtitleWorkspace() {
+const statusCopy: Record<SubtitleItem["status"], string> = {
+  draft: "Draft",
+  final: "Final",
+  corrected: "Corrected"
+};
+
+export function SubtitleWorkspace({
+  items,
+  isTranslating,
+  errorMessage
+}: SubtitleWorkspaceProps) {
   return (
     <section
       aria-labelledby="subtitle-workspace-title"
@@ -32,31 +36,55 @@ export function SubtitleWorkspace() {
           </p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
-          Rolling Pair
+          {isTranslating ? "Translating" : "Rolling Pair"}
         </span>
       </div>
 
+      {errorMessage ? (
+        <div className="mt-5 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorMessage}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-col gap-4">
-        {sampleSegments.map((segment, index) => (
-          <article
-            key={segment.status}
-            className={`rounded-[22px] border p-4 transition ${
-              index === sampleSegments.length - 1
-                ? "border-sky-200 bg-sky-50/70 shadow-[0_10px_32px_rgba(14,165,233,0.12)]"
-                : "border-slate-200 bg-slate-50/80"
-            }`}
-          >
-            <div className="mb-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">
-              {segment.status}
-            </div>
-            <p className="text-lg font-medium leading-7 text-slate-900">
-              {segment.english}
-            </p>
-            <p className="mt-3 text-base leading-7 text-slate-700">
-              {segment.chinese}
-            </p>
+        {items.length === 0 ? (
+          <article className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-500">
+            点击“开始模拟”或切到 Cloud ASR 模式后开始实时输入，这里会滚动显示最近两组英中对应字幕。
           </article>
-        ))}
+        ) : null}
+
+        {items.map((segment, index) => {
+          const isNewest = index === items.length - 1;
+
+          return (
+            <article
+              key={segment.id}
+              className={`rounded-[22px] border p-4 transition ${
+                isNewest
+                  ? "border-sky-200 bg-sky-50/70 shadow-[0_10px_32px_rgba(14,165,233,0.12)]"
+                  : "border-slate-200 bg-slate-50/80"
+              }`}
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">
+                  {isNewest ? "当前句" : "上一句"}
+                </span>
+                <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                  {statusCopy[segment.status]}
+                </span>
+              </div>
+              <p className="text-lg font-medium leading-7 text-slate-900">
+                {segment.english}
+              </p>
+              <p className="mt-3 text-base leading-7 text-slate-700">
+                {segment.chinese ||
+                  (segment.status === "draft"
+                    ? "等待句子定稿后生成正式中文字幕。"
+                    : "正在生成中文字幕...")}
+              </p>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
