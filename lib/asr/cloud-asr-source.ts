@@ -1,0 +1,84 @@
+import type {
+  AudioInputSource,
+  AudioInputChunk
+} from "../audio/audio-input-source";
+import type { TranscriptEvent } from "../schemas/transcript";
+import type {
+  CloudAsrProviderClient,
+  CloudAsrProviderConnection
+} from "./cloud-asr-provider";
+
+export type CloudAsrEventNormalizer<TRawEvent = unknown> = (
+  event: TRawEvent
+) => TranscriptEvent[];
+
+export interface CloudAsrSourceCallbacks {
+  onEvent: (event: TranscriptEvent) => void;
+  onError?: (error: unknown) => void;
+}
+
+export interface CloudAsrSourceOptions<TRawEvent = unknown> {
+  audioInput: AudioInputSource;
+  provider: CloudAsrProviderClient<TRawEvent>;
+  normalizeEvent: CloudAsrEventNormalizer<TRawEvent>;
+}
+
+export class CloudAsrSource<TRawEvent = unknown> {
+  private readonly audioInput: AudioInputSource;
+  private readonly provider: CloudAsrProviderClient<TRawEvent>;
+  private readonly normalizeEvent: CloudAsrEventNormalizer<TRawEvent>;
+  private connection: CloudAsrProviderConnection | null = null;
+  private callbacks: CloudAsrSourceCallbacks | null = null;
+
+  constructor(options: CloudAsrSourceOptions<TRawEvent>) {
+    this.audioInput = options.audioInput;
+    this.provider = options.provider;
+    this.normalizeEvent = options.normalizeEvent;
+  }
+
+  async start(callbacks: CloudAsrSourceCallbacks): Promise<void> {
+    if (this.connection) {
+      throw new Error("CloudAsrSource is already running.");
+    }
+
+    this.callbacks = callbacks;
+    this.connection = await this.provider.connect({
+      onEvent: (event) => {
+        for (const normalizedEvent of this.normalizeEvent(event)) {
+          this.callbacks?.onEvent(normalizedEvent);
+        }
+      },
+      onError: (error) => {
+        this.callbacks?.onError?.(error);
+      }
+    });
+
+    try {
+      await this.audioInput.start((chunk) => {
+        this.forwardChunk(chunk);
+      });
+    } catch (error) {
+      await this.connection.close();
+      this.connection = null;
+      this.callbacks = null;
+      throw error;
+    }
+  }
+
+  async stop(): Promise<void> {
+    this.audioInput.stop();
+
+    if (this.connection) {
+      await this.connection.close();
+      this.connection = null;
+    }
+
+    this.callbacks = null;
+  }
+
+  private forwardChunk(chunk: AudioInputChunk) {
+    void this.connection
+      ?.sendAudioChunk(chunk)
+      .catch((error) => this.callbacks?.onError?.(error));
+  }
+}
