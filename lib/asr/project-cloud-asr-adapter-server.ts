@@ -1,5 +1,5 @@
 import { WebSocketServer, type RawData, WebSocket } from "ws";
-import { ProjectCloudAsrAdapterSession } from "./project-cloud-asr-adapter-session";
+import { ProjectCloudAsrAdapterSession } from "./project-cloud-asr-adapter-session.ts";
 import type {
   CloudAsrProviderClient
 } from "./cloud-asr-provider";
