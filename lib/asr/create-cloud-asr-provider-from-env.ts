@@ -1,14 +1,14 @@
 import {
   AliyunFunAsrRealtimeProvider,
   type AliyunFunAsrRealtimeProviderOptions
-} from "./aliyun-funasr-realtime-provider";
+} from "./aliyun-funasr-realtime-provider.ts";
 import type { CloudAsrProviderClient } from "./cloud-asr-provider";
 import type { CloudAsrSegmentUpdate } from "./cloud-asr-transcript-normalizer";
-import { FunAsrWebSocketProvider } from "./funasr-websocket-provider";
+import { FunAsrWebSocketProvider } from "./funasr-websocket-provider.ts";
 import {
   createNodeAliyunFunAsrSocket,
   createNodeFunAsrSocket
-} from "./node-compatible-websocket";
+} from "./node-compatible-websocket.ts";
 
 type ProviderName = "funasr" | "aliyun-funasr";
 

@@ -8,7 +8,7 @@ import {
   createAliyunFunAsrMessageMapper,
   type AliyunFunAsrMessageMapper,
   type AliyunFunAsrServerEvent
-} from "./aliyun-funasr-message-mapper";
+} from "./aliyun-funasr-message-mapper.ts";
 import type { CloudAsrSegmentUpdate } from "./cloud-asr-transcript-normalizer";
 
 type WebSocketLike = {

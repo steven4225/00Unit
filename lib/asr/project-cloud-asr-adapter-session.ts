@@ -11,6 +11,8 @@ export type AdapterBrowserSocket = {
 };
 
 export class ProjectCloudAsrAdapterSession {
+  private readonly browserSocket: AdapterBrowserSocket;
+  private readonly provider: CloudAsrProviderClient<CloudAsrSegmentUpdate>;
   private providerConnection: CloudAsrProviderConnection | null = null;
   private browserClosed = false;
   private sequence = 0;
@@ -18,9 +20,12 @@ export class ProjectCloudAsrAdapterSession {
   private stopPromise: Promise<void> | null = null;
 
   constructor(
-    private readonly browserSocket: AdapterBrowserSocket,
-    private readonly provider: CloudAsrProviderClient<CloudAsrSegmentUpdate>
-  ) {}
+    browserSocket: AdapterBrowserSocket,
+    provider: CloudAsrProviderClient<CloudAsrSegmentUpdate>
+  ) {
+    this.browserSocket = browserSocket;
+    this.provider = provider;
+  }
 
   async start() {
     this.providerConnection = await this.provider.connect({

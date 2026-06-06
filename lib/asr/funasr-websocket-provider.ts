@@ -7,7 +7,7 @@ import {
   createFunAsrMessageMapper,
   type FunAsrMessageMapper,
   type FunAsrServerMessage
-} from "./funasr-message-mapper";
+} from "./funasr-message-mapper.ts";
 import type { CloudAsrSegmentUpdate } from "./cloud-asr-transcript-normalizer";
 
 type WebSocketLike = {
