@@ -48,6 +48,8 @@ export function WorkbenchClient({
   const [providerEventCount, setProviderEventCount] = useState(0);
   const [audioLevelPercent, setAudioLevelPercent] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [activeTranslationId, setActiveTranslationId] = useState<string | null>(null);
+  const [blockedTranslationKey, setBlockedTranslationKey] = useState<string | null>(null);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>("idle");
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -56,7 +58,6 @@ export function WorkbenchClient({
   const cloudSourceRef = useRef<CloudAsrRuntime | null>(null);
   const latestItemsRef = useRef(subtitleState.itemsById);
   const translationAbortRef = useRef<AbortController | null>(null);
-  const translationRequestVersionRef = useRef(0);
 
   if (!mockSourceRef.current) {
     mockSourceRef.current = createMockSource();
@@ -101,20 +102,39 @@ export function WorkbenchClient({
   );
 
   useEffect(() => {
-    if (pendingTranslations.length === 0) {
+    if (pendingTranslations.length === 0 && activeTranslationId === null) {
+      setIsTranslating(false);
+      if (blockedTranslationKey !== null) {
+        setBlockedTranslationKey(null);
+      }
+      return;
+    }
+
+    if (activeTranslationId !== null || pendingTranslations.length === 0) {
+      return;
+    }
+
+    const nextTranslation = pendingTranslations[0];
+    const nextTranslationKey = createTranslationRequestKey(nextTranslation);
+
+    if (
+      blockedTranslationKey !== null &&
+      blockedTranslationKey !== nextTranslationKey
+    ) {
+      setBlockedTranslationKey(null);
+      return;
+    }
+
+    if (blockedTranslationKey === nextTranslationKey) {
       setIsTranslating(false);
       return;
     }
 
-    translationAbortRef.current?.abort();
     const controller = new AbortController();
     translationAbortRef.current = controller;
-    const requestVersion = ++translationRequestVersionRef.current;
-    const requestSnapshot = Object.fromEntries(
-      pendingTranslations.map((item) => [item.id, item.text])
-    );
 
     async function runTranslation() {
+      setActiveTranslationId(nextTranslation.id);
       setIsTranslating(true);
       setTranslationError(null);
 
@@ -125,7 +145,7 @@ export function WorkbenchClient({
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            items: pendingTranslations
+            items: [nextTranslation]
           }),
           signal: controller.signal
         });
@@ -136,12 +156,8 @@ export function WorkbenchClient({
 
         const result = translationResponseSchema.parse(await response.json());
 
-        if (translationRequestVersionRef.current !== requestVersion) {
-          return;
-        }
-
         result.items.forEach((item) => {
-          if (latestItemsRef.current[item.id]?.english === requestSnapshot[item.id]) {
+          if (latestItemsRef.current[item.id]?.english === nextTranslation.text) {
             dispatch({
               type: "TRANSLATION_APPLIED",
               id: item.id,
@@ -154,24 +170,22 @@ export function WorkbenchClient({
           return;
         }
 
+        setBlockedTranslationKey(nextTranslationKey);
         setTranslationError(
           error instanceof Error
             ? "中文字幕生成失败，请稍后重试。"
             : "中文字幕生成失败，请稍后重试。"
         );
       } finally {
-        if (translationRequestVersionRef.current === requestVersion) {
-          setIsTranslating(false);
+        if (translationAbortRef.current === controller) {
+          translationAbortRef.current = null;
         }
+        setActiveTranslationId(null);
       }
     }
 
     void runTranslation();
-
-    return () => {
-      controller.abort();
-    };
-  }, [pendingTranslations]);
+  }, [activeTranslationId, blockedTranslationKey, pendingTranslations]);
 
   async function stopRealtimeSource(
     target: CloudAsrRuntime | null = cloudSourceRef.current
@@ -198,6 +212,8 @@ export function WorkbenchClient({
     });
     setPlaybackStatus("idle");
     setIsTranslating(false);
+    setActiveTranslationId(null);
+    setBlockedTranslationKey(null);
     setTranslationError(null);
     setRealtimeError(null);
     setAudioChunkCount(0);
@@ -422,4 +438,8 @@ function resolveRealtimeErrorMessage(error: unknown) {
   }
 
   return "真实输入连接失败，请重试。";
+}
+
+function createTranslationRequestKey(item: { id: string; text: string }) {
+  return `${item.id}:${item.text}`;
 }

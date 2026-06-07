@@ -19,6 +19,21 @@ function createJsonResponse(payload: unknown, status = 200) {
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject
+  };
+}
+
 function getButtons() {
   return {
     startButton: screen.getByRole("button", {
@@ -300,6 +315,105 @@ describe("HomePage", () => {
     expect(screen.getByText("tab audio")).toBeInTheDocument();
     expect(screen.getByText("shared audio")).toBeInTheDocument();
     expect(createCloudAsrSource).toHaveBeenCalledWith("browser-tab-audio");
+  });
+
+  it("serializes final-segment translation requests instead of interrupting the in-flight one", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const firstTranslation = createDeferred<Response>();
+    const secondTranslation = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+
+      if (!url.endsWith("/api/translate")) {
+        throw new Error(`Unexpected request: ${url}`);
+      }
+
+      if (body.items[0]?.id === "cloud-seg-1") {
+        return firstTranslation.promise;
+      }
+
+      if (body.items[0]?.id === "cloud-seg-2") {
+        return secondTranslation.promise;
+      }
+
+      throw new Error(`Unexpected translation payload: ${JSON.stringify(body)}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-1",
+        text: "first final phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 700,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-2",
+        text: "second final phrase",
+        isFinal: true,
+        startMs: 800,
+        endMs: 1400,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstTranslation.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-1",
+              chinese: "ZH:first final phrase"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("ZH:first final phrase")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      secondTranslation.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-2",
+              chinese: "ZH:second final phrase"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("ZH:second final phrase")).toBeInTheDocument();
   });
 
   it("surfaces cloud asr startup failures and offers a retry path", async () => {
