@@ -99,7 +99,7 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "AI 英文演讲实时字幕翻译助手"
+        name: "AI 实时字幕翻译助手"
       })
     ).toBeInTheDocument();
     expect(
@@ -110,6 +110,28 @@ describe("HomePage", () => {
     expect(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" })).toBeInTheDocument();
     expect(screen.getByText("主字幕区")).toBeInTheDocument();
     expect(screen.getByText("会后总结")).toBeInTheDocument();
+    expect(screen.getByText("Realtime Subtitle Workbench")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "支持 mock、浏览器麦克风与标签页音频输入，并复用同一条 Cloud ASR、翻译与总结链路完成实时字幕工作流。"
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("总结、关键词和待复核术语通过手动触发生成，与实时字幕链路分开处理。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("点击“生成总结”后，这里会基于当前完整识别稿输出中文摘要。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("生成总结后，这里会显示自动提取的关键词。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("生成总结后，这里会显示需要人工复核的术语或片段。")
+    ).toBeInTheDocument();
+    expect(screen.getByText("待复核术语")).toBeInTheDocument();
+    expect(screen.queryByText("small models")).not.toBeInTheDocument();
+    expect(screen.queryByText("translation")).not.toBeInTheDocument();
+    expect(screen.queryByText("correction")).not.toBeInTheDocument();
   });
 
   it("plays mock transcript events and keeps interim updates display-only", async () => {
@@ -236,7 +258,7 @@ describe("HomePage", () => {
     expect(
       screen.getByLabelText("Tab audio verification handoff")
     ).toBeInTheDocument();
-    expect(screen.getByText("标签页音频验收提示")).toBeInTheDocument();
+    expect(screen.getByText("标签页音频接入提示")).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(getButtons().startButton);
