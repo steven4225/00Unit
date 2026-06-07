@@ -11,11 +11,10 @@ export default function HomePage() {
               Realtime Subtitle Workbench
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-              AI 实时字幕翻译助手
+              00Unit
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              支持 mock、浏览器麦克风与标签页音频输入，并复用同一条 Cloud
-              ASR、翻译与总结链路完成实时字幕工作流。
+              一个面向实时字幕、翻译与总结的工作台原型
             </p>
           </div>
 

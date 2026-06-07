@@ -116,7 +116,7 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "AI 实时字幕翻译助手"
+        name: "00Unit"
       })
     ).toBeInTheDocument();
     expect(
@@ -129,9 +129,7 @@ describe("HomePage", () => {
     expect(screen.getByText("会后总结")).toBeInTheDocument();
     expect(screen.getByText("Realtime Subtitle Workbench")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "支持 mock、浏览器麦克风与标签页音频输入，并复用同一条 Cloud ASR、翻译与总结链路完成实时字幕工作流。"
-      )
+      screen.getByText("一个面向实时字幕、翻译与总结的工作台原型")
     ).toBeInTheDocument();
     expect(
       screen.getByText("总结、关键词和待复核术语通过手动触发生成，与实时字幕链路分开处理。")
