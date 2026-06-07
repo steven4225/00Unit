@@ -31,6 +31,15 @@ export function ControlBar({
   isSummaryLoading,
   isRealtimeStarting
 }: ControlBarProps) {
+  const startButtonLabel =
+    inputMode === "mock"
+      ? "开始模拟"
+      : isRealtimeStarting
+        ? "连接中..."
+        : inputMode === "cloud-asr-tab"
+          ? "共享标签页音频"
+          : "开始实时输入";
+
   return (
     <section
       aria-labelledby="control-area-title"
@@ -80,11 +89,7 @@ export function ControlBar({
             disabled={!canStart}
             className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-900 shadow-sm transition hover:border-sky-300 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
-            {inputMode === "mock"
-              ? "开始模拟"
-              : isRealtimeStarting
-                ? "连接中..."
-                : "开始实时输入"}
+            {startButtonLabel}
           </button>
           <button
             type="button"

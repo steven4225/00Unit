@@ -359,6 +359,7 @@ export function WorkbenchClient({
           audioChunkCount={audioChunkCount}
           providerEventCount={providerEventCount}
           audioLevelPercent={audioLevelPercent}
+          showTabAudioHandoff={inputMode === "cloud-asr-tab"}
         />
         <ControlBar
           inputMode={inputMode}
