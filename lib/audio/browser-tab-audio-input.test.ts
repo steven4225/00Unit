@@ -70,15 +70,17 @@ class MockAudioContext {
 describe("BrowserTabAudioInput", () => {
   const getDisplayMediaMock = vi.fn();
   const stopTrackMock = vi.fn();
+  const audioTrack = { kind: "audio", onended: null as (() => void) | null };
   const mediaStream = {
     getTracks: () => [{ stop: stopTrackMock }],
-    getAudioTracks: () => [{ kind: "audio" }]
+    getAudioTracks: () => [audioTrack]
   } as unknown as MediaStream;
   let audioContext: MockAudioContext;
 
   beforeEach(() => {
     getDisplayMediaMock.mockReset();
     stopTrackMock.mockReset();
+    audioTrack.onended = null;
     getDisplayMediaMock.mockResolvedValue(mediaStream);
     audioContext = new MockAudioContext(16_000);
 
@@ -187,5 +189,43 @@ describe("BrowserTabAudioInput", () => {
         code: "permission-denied"
       })
     );
+  });
+
+  it("treats share-end as a retryable session boundary", async () => {
+    const input = new BrowserTabAudioInput({
+      getDisplayMedia: getDisplayMediaMock,
+      createAudioContext: () => audioContext as unknown as AudioContext
+    });
+    const onEnded = vi.fn();
+
+    await input.start(vi.fn(), {
+      onEnded
+    });
+
+    audioTrack.onended?.();
+
+    expect(onEnded).toHaveBeenCalledWith(
+      expect.objectContaining<AudioInputError>({
+        code: "device-unavailable",
+        message: "Browser tab audio sharing ended. Start a new share to continue."
+      })
+    );
+    expect(audioContext.closed).toBe(true);
+  });
+
+  it("clears share-end listeners after stop so tab audio does not keep listening", async () => {
+    const input = new BrowserTabAudioInput({
+      getDisplayMedia: getDisplayMediaMock,
+      createAudioContext: () => audioContext as unknown as AudioContext
+    });
+    const onEnded = vi.fn();
+
+    await input.start(vi.fn(), {
+      onEnded
+    });
+    input.stop();
+
+    expect(audioTrack.onended).toBeNull();
+    expect(onEnded).not.toHaveBeenCalled();
   });
 });

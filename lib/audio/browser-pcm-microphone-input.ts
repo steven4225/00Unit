@@ -1,6 +1,7 @@
 import type {
   AudioInputChunk,
   AudioInputChunkHandler,
+  AudioInputLifecycleCallbacks,
   AudioInputSource
 } from "./audio-input-source";
 import { AudioInputError } from "./browser-microphone-input";
@@ -64,7 +65,10 @@ export class BrowserPcmMicrophoneInput implements AudioInputSource {
     this.createAudioContextImpl = options.createAudioContext;
   }
 
-  async start(onChunk: AudioInputChunkHandler) {
+  async start(
+    onChunk: AudioInputChunkHandler,
+    _callbacks?: AudioInputLifecycleCallbacks
+  ) {
     if (this.audioContext) {
       return;
     }

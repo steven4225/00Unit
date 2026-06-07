@@ -57,9 +57,16 @@ export class CloudAsrSource<TRawEvent = unknown> {
     });
 
     try {
-      await this.audioInput.start((chunk) => {
-        this.forwardChunk(chunk);
-      });
+      await this.audioInput.start(
+        (chunk) => {
+          this.forwardChunk(chunk);
+        },
+        {
+          onEnded: (reason) => {
+            void this.handleAudioInputEnded(reason);
+          }
+        }
+      );
     } catch (error) {
       await this.connection.close();
       this.connection = null;
@@ -84,5 +91,20 @@ export class CloudAsrSource<TRawEvent = unknown> {
     void this.connection
       ?.sendAudioChunk(chunk)
       .catch((error) => this.callbacks?.onError?.(error));
+  }
+
+  private async handleAudioInputEnded(reason: unknown) {
+    const activeCallbacks = this.callbacks;
+
+    try {
+      await this.stop();
+    } catch (error) {
+      activeCallbacks?.onError?.(error);
+      return;
+    }
+
+    activeCallbacks?.onError?.(
+      reason ?? new Error("The active audio input session ended unexpectedly.")
+    );
   }
 }
