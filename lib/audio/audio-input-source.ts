@@ -16,8 +16,14 @@ export const audioInputChunkSchema = z.object({
 export type AudioInputKind = z.infer<typeof audioInputKindSchema>;
 export type AudioInputChunk = z.infer<typeof audioInputChunkSchema>;
 export type AudioInputChunkHandler = (chunk: AudioInputChunk) => void;
+export type AudioInputLifecycleCallbacks = {
+  onEnded?: (reason?: unknown) => void;
+};
 
 export interface AudioInputSource {
-  start(onChunk: AudioInputChunkHandler): Promise<void>;
+  start(
+    onChunk: AudioInputChunkHandler,
+    callbacks?: AudioInputLifecycleCallbacks
+  ): Promise<void>;
   stop(): void;
 }

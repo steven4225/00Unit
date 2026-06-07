@@ -1,6 +1,7 @@
 import type {
   AudioInputChunk,
   AudioInputChunkHandler,
+  AudioInputLifecycleCallbacks,
   AudioInputSource
 } from "./audio-input-source";
 import { AudioInputError } from "./browser-microphone-input";
@@ -49,6 +50,7 @@ export class BrowserTabAudioInput implements AudioInputSource {
   private mediaStreamSource: MediaStreamSourceNodeLike | null = null;
   private processorNode: ScriptProcessorNodeLike | null = null;
   private stream: MediaStream | null = null;
+  private audioTrack: MediaStreamTrack | null = null;
   private sequence = 0;
 
   constructor(options: BrowserTabAudioInputOptions = {}) {
@@ -58,7 +60,10 @@ export class BrowserTabAudioInput implements AudioInputSource {
     this.createAudioContextImpl = options.createAudioContext;
   }
 
-  async start(onChunk: AudioInputChunkHandler) {
+  async start(
+    onChunk: AudioInputChunkHandler,
+    callbacks?: AudioInputLifecycleCallbacks
+  ) {
     if (this.audioContext) {
       return;
     }
@@ -80,7 +85,12 @@ export class BrowserTabAudioInput implements AudioInputSource {
         }
       });
 
-      if (typeof stream.getAudioTracks === "function" && stream.getAudioTracks().length === 0) {
+      const audioTrack =
+        typeof stream.getAudioTracks === "function"
+          ? stream.getAudioTracks()[0] ?? null
+          : null;
+
+      if (!audioTrack) {
         throw new AudioInputError(
           "device-unavailable",
           "No readable browser tab audio track is available from the current share."
@@ -140,7 +150,17 @@ export class BrowserTabAudioInput implements AudioInputSource {
         await activeAudioContext.resume();
       }
 
+      audioTrack.onended = () => {
+        const shareEndedError = new AudioInputError(
+          "device-unavailable",
+          "Browser tab audio sharing ended. Start a new share to continue."
+        );
+        this.stop();
+        callbacks?.onEnded?.(shareEndedError);
+      };
+
       this.stream = stream;
+      this.audioTrack = audioTrack;
       this.audioContext = audioContext;
       this.mediaStreamSource = mediaStreamSource;
       this.processorNode = processorNode;
@@ -158,6 +178,10 @@ export class BrowserTabAudioInput implements AudioInputSource {
   }
 
   stop() {
+    if (this.audioTrack) {
+      this.audioTrack.onended = null;
+    }
+
     this.processorNode?.disconnect();
     this.mediaStreamSource?.disconnect();
 
@@ -173,6 +197,7 @@ export class BrowserTabAudioInput implements AudioInputSource {
     this.mediaStreamSource = null;
     this.audioContext = null;
     this.stream = null;
+    this.audioTrack = null;
     this.sequence = 0;
   }
 

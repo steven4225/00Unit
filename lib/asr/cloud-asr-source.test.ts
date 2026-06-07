@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   AudioInputChunk,
+  AudioInputLifecycleCallbacks,
   AudioInputSource
 } from "../audio/audio-input-source";
 import type { TranscriptEvent } from "../schemas/transcript";
@@ -192,5 +193,87 @@ describe("CloudAsrSource", () => {
     ).rejects.toThrow(startupError);
 
     expect(providerConnection.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats input end as a realtime session boundary and forwards a retryable error", async () => {
+    let lifecycleCallbacks: AudioInputLifecycleCallbacks | undefined;
+    const shareEndedError = new Error("share ended");
+    const onError = vi.fn();
+
+    const audioInput: AudioInputSource = {
+      start: vi.fn(async (_handler, callbacks) => {
+        lifecycleCallbacks = callbacks;
+      }),
+      stop: vi.fn()
+    };
+
+    const providerConnection: CloudAsrProviderConnection = {
+      sendAudioChunk: vi.fn(async () => {}),
+      close: vi.fn(async () => {})
+    };
+
+    const provider: CloudAsrProviderClient = {
+      connect: vi.fn(async () => providerConnection)
+    };
+
+    const source = new CloudAsrSource({
+      audioInput,
+      provider,
+      normalizeEvent: () => []
+    });
+
+    await source.start({
+      onEvent: vi.fn(),
+      onError
+    });
+
+    lifecycleCallbacks?.onEnded?.(shareEndedError);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(audioInput.stop).toHaveBeenCalledTimes(1);
+    expect(providerConnection.close).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(shareEndedError);
+  });
+
+  it("reports provider close failures during input-end cleanup", async () => {
+    let lifecycleCallbacks: AudioInputLifecycleCallbacks | undefined;
+    const closeError = new Error("provider close failed");
+    const onError = vi.fn();
+
+    const audioInput: AudioInputSource = {
+      start: vi.fn(async (_handler, callbacks) => {
+        lifecycleCallbacks = callbacks;
+      }),
+      stop: vi.fn()
+    };
+
+    const providerConnection: CloudAsrProviderConnection = {
+      sendAudioChunk: vi.fn(async () => {}),
+      close: vi.fn(async () => {
+        throw closeError;
+      })
+    };
+
+    const provider: CloudAsrProviderClient = {
+      connect: vi.fn(async () => providerConnection)
+    };
+
+    const source = new CloudAsrSource({
+      audioInput,
+      provider,
+      normalizeEvent: () => []
+    });
+
+    await source.start({
+      onEvent: vi.fn(),
+      onError
+    });
+
+    lifecycleCallbacks?.onEnded?.(new Error("share ended"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onError).toHaveBeenCalledWith(closeError);
   });
 });

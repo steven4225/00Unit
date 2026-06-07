@@ -1,6 +1,7 @@
 import type {
   AudioInputChunk,
   AudioInputChunkHandler,
+  AudioInputLifecycleCallbacks,
   AudioInputSource
 } from "./audio-input-source";
 
@@ -50,7 +51,10 @@ export class BrowserMicrophoneInput implements AudioInputSource {
     this.createRecorderImpl = options.createRecorder;
   }
 
-  async start(onChunk: AudioInputChunkHandler) {
+  async start(
+    onChunk: AudioInputChunkHandler,
+    _callbacks?: AudioInputLifecycleCallbacks
+  ) {
     if (this.recorder) {
       return;
     }
