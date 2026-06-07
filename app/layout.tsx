@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AI Caption Translation Workbench",
-  description: "Phase-1 caption translation workbench shell."
+  description:
+    "Realtime subtitle translation workbench with mock, microphone, and browser tab audio input modes."
 };
 
 export default function RootLayout({
