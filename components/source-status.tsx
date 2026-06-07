@@ -5,13 +5,19 @@ type SourceStatusProps = {
   statusDetail: string;
   modeLabel: string;
   errorMessage: string | null;
+  audioChunkCount?: number;
+  providerEventCount?: number;
+  audioLevelPercent?: number;
 };
 
 export function SourceStatus({
   sourceLabel,
   statusDetail,
   modeLabel,
-  errorMessage
+  errorMessage,
+  audioChunkCount = 0,
+  providerEventCount = 0,
+  audioLevelPercent = 0
 }: SourceStatusProps) {
   return (
     <section
@@ -47,6 +53,18 @@ export function SourceStatus({
             {errorMessage}
           </div>
         ) : null}
+
+        <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+          <span className="rounded-full bg-white/80 px-3 py-1">
+            音频块: {audioChunkCount}
+          </span>
+          <span className="rounded-full bg-white/80 px-3 py-1">
+            音频能量: {audioLevelPercent}%
+          </span>
+          <span className="rounded-full bg-white/80 px-3 py-1">
+            ASR事件: {providerEventCount}
+          </span>
+        </div>
       </div>
     </section>
   );

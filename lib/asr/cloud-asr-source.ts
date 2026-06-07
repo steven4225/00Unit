@@ -15,6 +15,8 @@ export type CloudAsrEventNormalizer<TRawEvent = unknown> = (
 export interface CloudAsrSourceCallbacks {
   onEvent: (event: TranscriptEvent) => void;
   onError?: (error: unknown) => void;
+  onInputActivity?: (chunk: AudioInputChunk) => void;
+  onProviderActivity?: () => void;
 }
 
 export interface CloudAsrSourceOptions<TRawEvent = unknown> {
@@ -44,6 +46,7 @@ export class CloudAsrSource<TRawEvent = unknown> {
     this.callbacks = callbacks;
     this.connection = await this.provider.connect({
       onEvent: (event) => {
+        this.callbacks?.onProviderActivity?.();
         for (const normalizedEvent of this.normalizeEvent(event)) {
           this.callbacks?.onEvent(normalizedEvent);
         }
@@ -77,6 +80,7 @@ export class CloudAsrSource<TRawEvent = unknown> {
   }
 
   private forwardChunk(chunk: AudioInputChunk) {
+    this.callbacks?.onInputActivity?.(chunk);
     void this.connection
       ?.sendAudioChunk(chunk)
       .catch((error) => this.callbacks?.onError?.(error));

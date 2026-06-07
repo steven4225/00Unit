@@ -43,6 +43,9 @@ export function WorkbenchClient({
   );
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
+  const [audioChunkCount, setAudioChunkCount] = useState(0);
+  const [providerEventCount, setProviderEventCount] = useState(0);
+  const [audioLevelPercent, setAudioLevelPercent] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>("idle");
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
@@ -196,6 +199,9 @@ export function WorkbenchClient({
     setIsTranslating(false);
     setTranslationError(null);
     setRealtimeError(null);
+    setAudioChunkCount(0);
+    setProviderEventCount(0);
+    setAudioLevelPercent(0);
     setSummaryStatus("idle");
     setSummaryData(null);
     setSummaryError(null);
@@ -232,6 +238,18 @@ export function WorkbenchClient({
       let startupInterrupted = false;
 
       await source.start({
+        onInputActivity: (chunk) => {
+          setAudioChunkCount((count) => count + 1);
+          setAudioLevelPercent(
+            Math.max(
+              0,
+              Math.min(100, Math.round((chunk.rmsLevel ?? 0) * 100))
+            )
+          );
+        },
+        onProviderActivity: () => {
+          setProviderEventCount((count) => count + 1);
+        },
         onEvent: (event) => {
           dispatch({
             type: "TRANSCRIPT_RECEIVED",
@@ -328,6 +346,9 @@ export function WorkbenchClient({
           statusDetail={statusDetail}
           modeLabel={modeLabel}
           errorMessage={realtimeError}
+          audioChunkCount={audioChunkCount}
+          providerEventCount={providerEventCount}
+          audioLevelPercent={audioLevelPercent}
         />
         <ControlBar
           inputMode={inputMode}

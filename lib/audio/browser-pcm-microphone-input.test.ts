@@ -47,6 +47,8 @@ class MockAudioContext {
   readonly mediaStreamSource = new MockMediaStreamSourceNode();
   readonly processorNode = new MockScriptProcessorNode();
   closed = false;
+  resumed = false;
+  state: "suspended" | "running" = "suspended";
 
   constructor(readonly sampleRate: number) {}
 
@@ -60,6 +62,11 @@ class MockAudioContext {
 
   async close() {
     this.closed = true;
+  }
+
+  async resume() {
+    this.resumed = true;
+    this.state = "running";
   }
 }
 
@@ -109,6 +116,7 @@ describe("BrowserPcmMicrophoneInput", () => {
       sequence: 0,
       mimeType: "audio/pcm"
     });
+    expect(onChunk.mock.calls[0]?.[0].rmsLevel).toBeGreaterThan(0);
 
     const blob = onChunk.mock.calls[0]?.[0].blob as Blob;
     expect(blob.size).toBe(10);
@@ -127,6 +135,18 @@ describe("BrowserPcmMicrophoneInput", () => {
     expect(audioContext.processorNode.disconnected).toBe(true);
     expect(audioContext.closed).toBe(true);
     expect(stopTrackMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes the audio context before streaming pcm chunks", async () => {
+    const input = new BrowserPcmMicrophoneInput({
+      getUserMedia: getUserMediaMock,
+      createAudioContext: () => audioContext as unknown as AudioContext
+    });
+
+    await input.start(vi.fn());
+
+    expect(audioContext.resumed).toBe(true);
+    expect(audioContext.state).toBe("running");
   });
 
   it("fails cleanly when audio context support is unavailable", async () => {

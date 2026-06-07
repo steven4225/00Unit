@@ -12,6 +12,7 @@ type AudioInputErrorCode =
   | "start-failed";
 
 type AudioContextLike = {
+  readonly state?: "suspended" | "running" | "closed";
   readonly sampleRate: number;
   readonly destination: unknown;
   createMediaStreamSource(stream: MediaStream): MediaStreamSourceNodeLike;
@@ -20,6 +21,7 @@ type AudioContextLike = {
     numberOfInputChannels: number,
     numberOfOutputChannels: number
   ): ScriptProcessorNodeLike;
+  resume?(): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -100,6 +102,7 @@ export class BrowserPcmMicrophoneInput implements AudioInputSource {
           this.targetSampleRate
         );
         const pcm16 = encodePcm16(downsampled);
+        const rmsLevel = calculateRmsLevel(downsampled);
 
         if (pcm16.byteLength === 0) {
           return;
@@ -108,6 +111,7 @@ export class BrowserPcmMicrophoneInput implements AudioInputSource {
         const chunk: AudioInputChunk = {
           sequence: this.sequence,
           mimeType: "audio/pcm",
+          rmsLevel,
           blob: new Blob(
             [
               new Uint8Array(
@@ -126,6 +130,13 @@ export class BrowserPcmMicrophoneInput implements AudioInputSource {
 
       mediaStreamSource.connect(processorNode);
       processorNode.connect(activeAudioContext.destination);
+
+      if (
+        typeof activeAudioContext.resume === "function" &&
+        activeAudioContext.state !== "running"
+      ) {
+        await activeAudioContext.resume();
+      }
 
       this.stream = stream;
       this.audioContext = audioContext;
@@ -289,4 +300,19 @@ function encodePcm16(input: Float32Array) {
   }
 
   return output;
+}
+
+function calculateRmsLevel(input: Float32Array) {
+  if (input.length === 0) {
+    return 0;
+  }
+
+  let sumSquares = 0;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = input[index] ?? 0;
+    sumSquares += sample * sample;
+  }
+
+  return Math.min(1, Math.sqrt(sumSquares / input.length));
 }

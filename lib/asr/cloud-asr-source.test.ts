@@ -28,6 +28,7 @@ const createTranscriptEvent = (id: string): TranscriptEvent => ({
 describe("CloudAsrSource", () => {
   it("streams captured audio chunks into the provider connection", async () => {
     let onChunk: ((chunk: AudioInputChunk) => void) | undefined;
+    const onInputActivity = vi.fn();
 
     const audioInput: AudioInputSource = {
       start: vi.fn(async (handler) => {
@@ -52,7 +53,8 @@ describe("CloudAsrSource", () => {
     });
 
     await source.start({
-      onEvent: vi.fn()
+      onEvent: vi.fn(),
+      onInputActivity
     });
 
     onChunk?.(createAudioChunk(1));
@@ -62,6 +64,11 @@ describe("CloudAsrSource", () => {
       expect.objectContaining({
         sequence: 1,
         mimeType: "audio/webm"
+      })
+    );
+    expect(onInputActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sequence: 1
       })
     );
   });
@@ -93,6 +100,7 @@ describe("CloudAsrSource", () => {
       createTranscriptEvent("seg-live-1")
     ]);
     const onEvent = vi.fn();
+    const onProviderActivity = vi.fn();
 
     const source = new CloudAsrSource({
       audioInput,
@@ -101,7 +109,8 @@ describe("CloudAsrSource", () => {
     });
 
     await source.start({
-      onEvent
+      onEvent,
+      onProviderActivity
     });
 
     providerHandlers?.onEvent({
@@ -119,6 +128,7 @@ describe("CloudAsrSource", () => {
         source: "cloud-asr"
       })
     );
+    expect(onProviderActivity).toHaveBeenCalledTimes(1);
   });
 
   it("stops both the audio input and the provider connection", async () => {
