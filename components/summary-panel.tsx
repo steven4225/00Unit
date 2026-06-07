@@ -19,7 +19,7 @@ export function SummaryPanel({
         ? summary.summary
         : status === "error"
           ? errorMessage ?? "总结生成失败，请稍后重试。"
-          : "在这个区域里，系统会基于当前完整识别稿输出中文摘要。";
+          : "点击“生成总结”后，这里会基于当前完整识别稿输出中文摘要。";
 
   const keywords = status === "ready" && summary ? summary.keywords : [];
   const uncertainTerms =
@@ -36,7 +36,7 @@ export function SummaryPanel({
             会后总结
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-300">
-            summary、keywords、uncertainTerms 通过手动触发生成，和实时字幕链路分离。
+            总结、关键词和待复核术语通过手动触发生成，与实时字幕链路分开处理。
           </p>
         </div>
         <span className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.18em] text-slate-300">
@@ -73,7 +73,7 @@ export function SummaryPanel({
         </section>
 
         <section>
-          <h3 className="text-sm font-medium text-slate-300">可疑术语</h3>
+          <h3 className="text-sm font-medium text-slate-300">待复核术语</h3>
           {uncertainTerms.length > 0 ? (
             <div className="mt-2 flex flex-col gap-2">
               {uncertainTerms.map((term) => (
@@ -87,7 +87,7 @@ export function SummaryPanel({
             </div>
           ) : (
             <p className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-300">
-              生成总结后，这里会显示需要复核的术语或片段。
+              生成总结后，这里会显示需要人工复核的术语或片段。
             </p>
           )}
         </section>

@@ -110,20 +110,28 @@ describe("HomePage", () => {
     expect(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" })).toBeInTheDocument();
     expect(screen.getByText("主字幕区")).toBeInTheDocument();
     expect(screen.getByText("会后总结")).toBeInTheDocument();
+    expect(screen.getByText("Realtime Subtitle Workbench")).toBeInTheDocument();
     expect(
       screen.getByText(
         "支持 mock、浏览器麦克风与标签页音频输入，并复用同一条 Cloud ASR、翻译与总结链路完成实时字幕工作流。"
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByText("在这个区域里，系统会基于当前完整识别稿输出中文摘要。")
+      screen.getByText("总结、关键词和待复核术语通过手动触发生成，与实时字幕链路分开处理。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("点击“生成总结”后，这里会基于当前完整识别稿输出中文摘要。")
     ).toBeInTheDocument();
     expect(
       screen.getByText("生成总结后，这里会显示自动提取的关键词。")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("生成总结后，这里会显示需要复核的术语或片段。")
+      screen.getByText("生成总结后，这里会显示需要人工复核的术语或片段。")
     ).toBeInTheDocument();
+    expect(screen.getByText("待复核术语")).toBeInTheDocument();
+    expect(screen.queryByText("small models")).not.toBeInTheDocument();
+    expect(screen.queryByText("translation")).not.toBeInTheDocument();
+    expect(screen.queryByText("correction")).not.toBeInTheDocument();
   });
 
   it("plays mock transcript events and keeps interim updates display-only", async () => {
@@ -504,7 +512,6 @@ describe("HomePage", () => {
 
     expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
     expect(screen.getByText("Draft")).toBeInTheDocument();
-    expect(screen.getByText("Preview CN")).toBeInTheDocument();
 
     await act(async () => {
       cloudSource.emit({
@@ -535,7 +542,6 @@ describe("HomePage", () => {
     });
 
     expect(screen.getByText("FINAL: 示例二。")).toBeInTheDocument();
-    expect(screen.getByText("Final CN")).toBeInTheDocument();
   });
 
   it("re-runs preview translation when the active draft text grows", async () => {
@@ -608,7 +614,6 @@ describe("HomePage", () => {
 
     expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Preview CN")).toBeInTheDocument();
 
     await act(async () => {
       cloudSource.emit({
