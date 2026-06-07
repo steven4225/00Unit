@@ -13,6 +13,24 @@ const statusCopy: Record<SubtitleItem["status"], string> = {
   corrected: "Corrected"
 };
 
+function resolveChineseBadgeCopy(segment: SubtitleItem) {
+  if (segment.status === "draft") {
+    return segment.chinese ? "Preview CN" : "Pending CN";
+  }
+
+  return segment.chinese ? "Final CN" : "Queued CN";
+}
+
+function resolveChineseBodyCopy(segment: SubtitleItem) {
+  if (segment.chinese) {
+    return segment.chinese;
+  }
+
+  return segment.status === "draft"
+    ? "等待句子定稿后生成正式中文字幕。"
+    : "正在生成中文字幕...";
+}
+
 export function SubtitleWorkspace({
   items,
   isTranslating,
@@ -72,15 +90,15 @@ export function SubtitleWorkspace({
                 <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
                   {statusCopy[segment.status]}
                 </span>
+                <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                  {resolveChineseBadgeCopy(segment)}
+                </span>
               </div>
               <p className="text-lg font-medium leading-7 text-slate-900">
                 {segment.english}
               </p>
               <p className="mt-3 text-base leading-7 text-slate-700">
-                {segment.chinese ||
-                  (segment.status === "draft"
-                    ? "等待句子定稿后生成正式中文字幕。"
-                    : "正在生成中文字幕...")}
+                {resolveChineseBodyCopy(segment)}
               </p>
             </article>
           );

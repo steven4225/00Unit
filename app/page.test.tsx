@@ -490,6 +490,7 @@ describe("HomePage", () => {
 
     expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
     expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.getByText("Preview CN")).toBeInTheDocument();
 
     await act(async () => {
       cloudSource.emit({
@@ -520,6 +521,7 @@ describe("HomePage", () => {
     });
 
     expect(screen.getByText("FINAL: 示例二。")).toBeInTheDocument();
+    expect(screen.getByText("Final CN")).toBeInTheDocument();
   });
 
   it("re-runs preview translation when the active draft text grows", async () => {
@@ -592,6 +594,7 @@ describe("HomePage", () => {
 
     expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Preview CN")).toBeInTheDocument();
 
     await act(async () => {
       cloudSource.emit({
