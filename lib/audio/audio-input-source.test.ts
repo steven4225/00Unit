@@ -11,6 +11,12 @@ describe("audio input source schemas", () => {
     );
   });
 
+  it("accepts browser tab audio as a valid real input kind", () => {
+    expect(audioInputKindSchema.parse("browser-tab-audio")).toBe(
+      "browser-tab-audio"
+    );
+  });
+
   it("validates raw audio chunk metadata", () => {
     expect(
       audioInputChunkSchema.parse({
