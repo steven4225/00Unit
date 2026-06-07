@@ -55,7 +55,10 @@ function applyTranscriptEvent(
   const nextItem: SubtitleItem = {
     id: event.id,
     english: event.text,
-    chinese: existingItem?.chinese ?? "",
+    chinese:
+      !event.isFinal && englishChanged
+        ? ""
+        : existingItem?.chinese ?? "",
     status: nextStatus,
     startMs: event.startMs,
     endMs: event.endMs
