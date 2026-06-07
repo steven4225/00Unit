@@ -233,6 +233,75 @@ describe("HomePage", () => {
     expect(cloudSource.start).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps translation and summary wired for tab-audio transcript events", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const createCloudAsrSource = vi.fn(() => cloudSource);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+
+      if (url.endsWith("/api/translate")) {
+        return createJsonResponse({
+          items: body.items.map((item: { id: string; text: string }) => ({
+            id: item.id,
+            chinese: `ZH:${item.text}`
+          }))
+        });
+      }
+
+      if (url.endsWith("/api/summarize")) {
+        expect(body.fullText).toContain("tab audio final phrase");
+
+        return createJsonResponse({
+          summary: "Tab audio summary",
+          keywords: ["tab audio", "cloud asr"],
+          uncertainTerms: ["shared audio"]
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkbenchClient createCloudAsrSource={createCloudAsrSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "tab-audio-seg-1",
+        text: "tab audio final phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 1200,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("ZH:tab audio final phrase")).toBeInTheDocument();
+
+    fireEvent.click(getButtons().summaryButton);
+
+    await act(async () => {
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("Tab audio summary")).toBeInTheDocument();
+    expect(screen.getByText("tab audio")).toBeInTheDocument();
+    expect(screen.getByText("shared audio")).toBeInTheDocument();
+    expect(createCloudAsrSource).toHaveBeenCalledWith("browser-tab-audio");
+  });
+
   it("surfaces cloud asr startup failures and offers a retry path", async () => {
     const failingFactory = vi
       .fn()
