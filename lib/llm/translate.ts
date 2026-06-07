@@ -27,8 +27,39 @@ export async function translateSegments(
   rawInput: TranslationRequest
 ): Promise<TranslationResponse> {
   const input = translationRequestSchema.parse(rawInput);
+  const model = getTranslateModel();
+
+  if (isQwenMtModel(model)) {
+    const items = await Promise.all(
+      input.items.map(async (item) => ({
+        id: item.id,
+        chinese: await createChatCompletion(
+          [
+            {
+              role: "user",
+              content: item.text
+            }
+          ],
+          {
+            model,
+            extraBody: {
+              translation_options: {
+                source_lang: "auto",
+                target_lang: "Chinese"
+              }
+            }
+          }
+        )
+      }))
+    );
+
+    return translationResponseSchema.parse({
+      items
+    });
+  }
+
   const content = await createChatCompletion(buildTranslationMessages(input), {
-    model: getTranslateModel()
+    model
   });
 
   let parsedJson: unknown;
@@ -40,4 +71,8 @@ export async function translateSegments(
   }
 
   return translationResponseSchema.parse(parsedJson);
+}
+
+function isQwenMtModel(model: string) {
+  return model.startsWith("qwen-mt-");
 }
