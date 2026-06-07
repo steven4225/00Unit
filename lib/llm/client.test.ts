@@ -87,6 +87,69 @@ describe("llm client config", () => {
     );
   });
 
+  it("passes provider-specific extra body fields through chat completions", async () => {
+    process.env.LLM_API_KEY = "llm-key";
+    process.env.LLM_BASE_URL = "https://example.com/compatible/v1";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "translated text"
+              }
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      )
+    );
+
+    await createChatCompletion(
+      [
+        {
+          role: "user",
+          content: "Example two."
+        }
+      ],
+      {
+        model: "qwen-mt-turbo",
+        extraBody: {
+          translation_options: {
+            source_lang: "auto",
+            target_lang: "Chinese"
+          }
+        }
+      }
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/compatible/v1/chat/completions",
+      expect.objectContaining({
+        body: JSON.stringify({
+          model: "qwen-mt-turbo",
+          messages: [
+            {
+              role: "user",
+              content: "Example two."
+            }
+          ],
+          temperature: 0.2,
+          translation_options: {
+            source_lang: "auto",
+            target_lang: "Chinese"
+          }
+        })
+      })
+    );
+  });
+
   it("falls back to existing openai env vars for backward compatibility", () => {
     process.env.OPENAI_API_KEY = "openai-key";
     process.env.OPENAI_TRANSLATE_MODEL = "gpt-4o-mini-translate";

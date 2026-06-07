@@ -30,6 +30,7 @@ export async function createChatCompletion(
   }[],
   options: {
     model: string;
+    extraBody?: Record<string, unknown>;
   }
 ) {
   const response = await fetch(`${getLlmBaseUrl()}/chat/completions`, {
@@ -41,7 +42,8 @@ export async function createChatCompletion(
     body: JSON.stringify({
       model: options.model,
       messages,
-      temperature: 0.2
+      temperature: 0.2,
+      ...options.extraBody
     })
   });
 
