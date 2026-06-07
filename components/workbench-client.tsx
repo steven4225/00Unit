@@ -14,6 +14,7 @@ import {
   createInitialSubtitleSessionState,
   subtitleSessionReducer
 } from "../lib/subtitle/reducer";
+import { type SubtitleMonitorSnapshot, SUBTITLE_MONITOR_CHANNEL_NAME, SUBTITLE_MONITOR_WINDOW_PATH } from "../lib/subtitle/subtitle-monitor-channel";
 import {
   selectRecentSubtitleWindow,
   selectSegmentsPendingTranslation
@@ -56,12 +57,14 @@ export function WorkbenchClient({
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>("idle");
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [monitorErrorMessage, setMonitorErrorMessage] = useState<string | null>(null);
 
   const mockSourceRef = useRef<TranscriptSource | null>(null);
   const cloudSourceRef = useRef<CloudAsrRuntime | null>(null);
   const latestItemsRef = useRef(subtitleState.itemsById);
   const translationAbortRef = useRef<AbortController | null>(null);
   const previewTranslationAbortRef = useRef<AbortController | null>(null);
+  const subtitleMonitorChannelRef = useRef<BroadcastChannel | null>(null);
 
   if (!mockSourceRef.current) {
     mockSourceRef.current = createMockSource();
@@ -75,6 +78,7 @@ export function WorkbenchClient({
     return () => {
       translationAbortRef.current?.abort();
       previewTranslationAbortRef.current?.abort();
+      subtitleMonitorChannelRef.current?.close();
       mockSourceRef.current?.pause();
       void stopRealtimeSource(cloudSourceRef.current);
     };
@@ -336,6 +340,7 @@ export function WorkbenchClient({
     setSummaryStatus("idle");
     setSummaryData(null);
     setSummaryError(null);
+    setMonitorErrorMessage(null);
   }
 
   async function handleModeChange(mode: InputMode) {
@@ -478,6 +483,39 @@ export function WorkbenchClient({
           ? "Paused"
           : "Standby";
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") {
+      return;
+    }
+
+    const channel = new BroadcastChannel(SUBTITLE_MONITOR_CHANNEL_NAME);
+    subtitleMonitorChannelRef.current = channel;
+
+    return () => {
+      channel.close();
+      if (subtitleMonitorChannelRef.current === channel) {
+        subtitleMonitorChannelRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const snapshot: SubtitleMonitorSnapshot = {
+      items: recentWindow,
+      isTranslating: isTranslating || isPreviewTranslating,
+      modeLabel,
+      statusDetail
+    };
+
+    subtitleMonitorChannelRef.current?.postMessage(snapshot);
+  }, [
+    isPreviewTranslating,
+    isTranslating,
+    modeLabel,
+    recentWindow,
+    statusDetail
+  ]);
+
   return (
     <div className="grid gap-6 px-6 py-6 md:px-8 md:py-8 lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
       <div className="flex flex-col gap-6">
@@ -508,6 +546,31 @@ export function WorkbenchClient({
           onGenerateSummary={() => {
             void handleGenerateSummary();
           }}
+          onOpenSubtitleMonitor={() => {
+            if (typeof window === "undefined") {
+              return;
+            }
+
+            const monitorWindow = window.open(
+              SUBTITLE_MONITOR_WINDOW_PATH,
+              "subtitle-monitor",
+              "popup=yes,width=520,height=720,resizable=yes,scrollbars=yes"
+            );
+
+            if (!monitorWindow) {
+              setMonitorErrorMessage("字幕窗被浏览器拦截，请允许弹窗后重试。");
+              return;
+            }
+
+            setMonitorErrorMessage(null);
+            monitorWindow.focus();
+            subtitleMonitorChannelRef.current?.postMessage({
+              items: recentWindow,
+              isTranslating: isTranslating || isPreviewTranslating,
+              modeLabel,
+              statusDetail
+            } satisfies SubtitleMonitorSnapshot);
+          }}
           onRetry={() => {
             void handleStart();
           }}
@@ -516,6 +579,7 @@ export function WorkbenchClient({
           canRetry={inputMode !== "mock" && realtimeError !== null}
           isSummaryLoading={summaryStatus === "loading"}
           isRealtimeStarting={inputMode !== "mock" && playbackStatus === "starting"}
+          monitorErrorMessage={monitorErrorMessage}
         />
         <SubtitleWorkspace
           items={recentWindow}
