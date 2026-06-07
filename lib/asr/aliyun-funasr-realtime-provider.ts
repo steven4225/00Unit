@@ -39,6 +39,7 @@ export interface AliyunFunAsrRealtimeProviderOptions {
   sampleRate?: 8000 | 16000;
   semanticPunctuationEnabled?: boolean;
   maxSentenceSilence?: number;
+  multiThresholdModeEnabled?: boolean;
   heartbeat?: boolean;
   mapper?: AliyunFunAsrMessageMapper;
   createWebSocket?: WebSocketFactory;
@@ -59,6 +60,7 @@ export class AliyunFunAsrRealtimeProvider
   private readonly sampleRate: NonNullable<AliyunFunAsrRealtimeProviderOptions["sampleRate"]>;
   private readonly semanticPunctuationEnabled?: boolean;
   private readonly maxSentenceSilence?: number;
+  private readonly multiThresholdModeEnabled?: boolean;
   private readonly heartbeat?: boolean;
   private readonly mapper: AliyunFunAsrMessageMapper;
   private readonly createWebSocket: WebSocketFactory;
@@ -74,6 +76,7 @@ export class AliyunFunAsrRealtimeProvider
     this.sampleRate = options.sampleRate ?? 16000;
     this.semanticPunctuationEnabled = options.semanticPunctuationEnabled;
     this.maxSentenceSilence = options.maxSentenceSilence;
+    this.multiThresholdModeEnabled = options.multiThresholdModeEnabled;
     this.heartbeat = options.heartbeat;
     this.mapper = options.mapper ?? createAliyunFunAsrMessageMapper();
     this.createWebSocket = options.createWebSocket ?? defaultCreateWebSocket;
@@ -107,6 +110,7 @@ export class AliyunFunAsrRealtimeProvider
               languageHints: this.languageHints,
               semanticPunctuationEnabled: this.semanticPunctuationEnabled,
               maxSentenceSilence: this.maxSentenceSilence,
+              multiThresholdModeEnabled: this.multiThresholdModeEnabled,
               heartbeat: this.heartbeat
             })
           )
@@ -202,6 +206,7 @@ function buildRunTaskMessage(options: {
   languageHints?: string[];
   semanticPunctuationEnabled?: boolean;
   maxSentenceSilence?: number;
+  multiThresholdModeEnabled?: boolean;
   heartbeat?: boolean;
 }) {
   const parameters: Record<string, unknown> = {
@@ -220,6 +225,11 @@ function buildRunTaskMessage(options: {
 
   if (typeof options.maxSentenceSilence === "number") {
     parameters.max_sentence_silence = options.maxSentenceSilence;
+  }
+
+  if (typeof options.multiThresholdModeEnabled === "boolean") {
+    parameters.multi_threshold_mode_enabled =
+      options.multiThresholdModeEnabled;
   }
 
   if (typeof options.heartbeat === "boolean") {
