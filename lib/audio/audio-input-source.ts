@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const audioInputKindSchema = z.enum([
   "browser-microphone",
+  "browser-tab-audio",
   "system-audio"
 ]);
 
