@@ -44,6 +44,15 @@ export function createCloudAsrProviderFromEnv(
       languageHint === "zh" || languageHint === "en" || languageHint === "ja"
         ? [languageHint]
         : undefined;
+    const semanticPunctuationEnabled = parseOptionalBoolean(
+      env.ALIYUN_FUNASR_SEMANTIC_PUNCTUATION_ENABLED
+    );
+    const maxSentenceSilence = parseOptionalInteger(
+      env.ALIYUN_FUNASR_MAX_SENTENCE_SILENCE
+    );
+    const multiThresholdModeEnabled = parseOptionalBoolean(
+      env.ALIYUN_FUNASR_MULTI_THRESHOLD_MODE_ENABLED
+    );
 
     return new AliyunFunAsrRealtimeProvider({
       apiKey,
@@ -51,6 +60,9 @@ export function createCloudAsrProviderFromEnv(
       url: env.ALIYUN_FUNASR_WEBSOCKET_URL,
       workspaceId: env.ALIYUN_WORKSPACE_ID,
       languageHints,
+      semanticPunctuationEnabled,
+      maxSentenceSilence,
+      multiThresholdModeEnabled,
       createWebSocket: options.createAliyunSocket ?? createNodeAliyunFunAsrSocket
     });
   }
@@ -64,4 +76,29 @@ export function createCloudAsrProviderFromEnv(
     url: funAsrUrl,
     createWebSocket: options.createFunAsrSocket ?? createNodeFunAsrSocket
   });
+}
+
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return undefined;
+}
+
+function parseOptionalInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
