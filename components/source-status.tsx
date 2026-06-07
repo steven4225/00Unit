@@ -36,7 +36,8 @@ export function SourceStatus({
               输入源状态
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              支持 mock、浏览器麦克风和浏览器标签页音频三种输入模式，并复用同一条 cloud asr 链路。
+              支持 mock、浏览器麦克风和浏览器标签页音频三种输入模式，并复用同一条
+              Cloud ASR 链路。
             </p>
           </div>
 
@@ -74,12 +75,12 @@ export function SourceStatus({
             aria-label="Tab audio verification handoff"
             className="rounded-[18px] border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-slate-700"
           >
-            <p className="font-semibold text-slate-900">标签页音频验收提示</p>
+            <p className="font-semibold text-slate-900">标签页音频接入提示</p>
             <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>使用 Chromium 浏览器，把工作台和英文音频内容放在两个不同标签页。</li>
-              <li>点击共享标签页音频，选择正在播放英文语音的标签页，并勾选共享音频。</li>
+              <li>使用 Chromium 浏览器，把工作台和待识别音频内容放在两个不同标签页。</li>
+              <li>点击共享标签页音频，选择正在播放目标语音内容的标签页，并勾选共享音频。</li>
               <li>先看音频块和音频能量是否增长，再看 ASR事件是否增长。</li>
-              <li>主字幕出现英文识别和中文翻译后，再点击生成总结验证完整链路。</li>
+              <li>主字幕出现识别结果和中文翻译后，再点击生成总结验证完整链路。</li>
             </ol>
           </div>
         ) : null}
