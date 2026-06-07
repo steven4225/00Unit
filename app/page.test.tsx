@@ -22,7 +22,7 @@ function createJsonResponse(payload: unknown, status = 200) {
 function getButtons() {
   return {
     startButton: screen.getByRole("button", {
-      name: /开始模拟|开始实时输入|连接中\.\.\./
+      name: /开始模拟|开始实时输入|共享标签页音频|连接中\.\.\./
     }),
     pauseButton: screen.getByRole("button", { name: "暂停" }),
     resetButton: screen.getByRole("button", { name: "重置" }),
@@ -217,6 +217,11 @@ describe("HomePage", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" }));
       await flushAsyncWork();
     });
+
+    expect(
+      screen.getByLabelText("Tab audio verification handoff")
+    ).toBeInTheDocument();
+    expect(screen.getByText("标签页音频验收提示")).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(getButtons().startButton);
