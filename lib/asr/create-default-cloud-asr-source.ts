@@ -1,4 +1,4 @@
-import { BrowserMicrophoneInput } from "../audio/browser-microphone-input";
+import { BrowserPcmMicrophoneInput } from "../audio/browser-pcm-microphone-input";
 import {
   CloudAsrSource,
   type CloudAsrSourceCallbacks
@@ -26,7 +26,7 @@ export function createDefaultCloudAsrSource(): CloudAsrRuntime {
   });
 
   return new CloudAsrSource<CloudAsrSegmentUpdate>({
-    audioInput: new BrowserMicrophoneInput(),
+    audioInput: new BrowserPcmMicrophoneInput(),
     provider: new ProjectCloudAsrAdapterProvider({
       url: adapterUrl
     }),
