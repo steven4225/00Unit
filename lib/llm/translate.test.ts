@@ -49,7 +49,10 @@ describe("translateSegments", () => {
     expect(createChatCompletionMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          role: "system"
+          role: "system",
+          content: expect.stringContaining(
+            "Automatically identify the source language"
+          )
         }),
         expect.objectContaining({
           role: "user"
