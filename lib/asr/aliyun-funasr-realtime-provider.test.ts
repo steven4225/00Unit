@@ -174,6 +174,49 @@ describe("AliyunFunAsrRealtimeProvider", () => {
     );
   });
 
+  it("includes optional sentence-boundary tuning parameters in the run-task payload", async () => {
+    const harness = createSocketHarness();
+    const provider = new AliyunFunAsrRealtimeProvider({
+      apiKey: "test-key",
+      model: "fun-asr-realtime-2026-02-28",
+      semanticPunctuationEnabled: false,
+      maxSentenceSilence: 650,
+      multiThresholdModeEnabled: true,
+      createTaskId: () => "task-boundary",
+      createWebSocket: () => harness.socket
+    });
+
+    void provider.connect({
+      onEvent: vi.fn()
+    });
+
+    harness.emitOpen();
+
+    expect(harness.socket.send).toHaveBeenCalledWith(
+      JSON.stringify({
+        header: {
+          action: "run-task",
+          task_id: "task-boundary",
+          streaming: "duplex"
+        },
+        payload: {
+          task_group: "audio",
+          task: "asr",
+          function: "recognition",
+          model: "fun-asr-realtime-2026-02-28",
+          parameters: {
+            format: "pcm",
+            sample_rate: 16000,
+            semantic_punctuation_enabled: false,
+            max_sentence_silence: 650,
+            multi_threshold_mode_enabled: true
+          },
+          input: {}
+        }
+      })
+    );
+  });
+
   it("surfaces task-failed events through the provider error handler", async () => {
     const harness = createSocketHarness();
     const onError = vi.fn();
