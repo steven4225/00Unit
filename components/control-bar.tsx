@@ -1,6 +1,6 @@
 import React from "react";
 
-export type InputMode = "mock" | "cloud-asr";
+export type InputMode = "mock" | "cloud-asr-mic" | "cloud-asr-tab";
 
 type ControlBarProps = {
   inputMode: InputMode;
@@ -61,9 +61,14 @@ export function ControlBar({
               onClick={() => onModeChange("mock")}
             />
             <ModeButton
-              label="Cloud ASR"
-              isActive={inputMode === "cloud-asr"}
-              onClick={() => onModeChange("cloud-asr")}
+              label="Cloud ASR (Mic)"
+              isActive={inputMode === "cloud-asr-mic"}
+              onClick={() => onModeChange("cloud-asr-mic")}
+            />
+            <ModeButton
+              label="Cloud ASR (Tab Audio)"
+              isActive={inputMode === "cloud-asr-tab"}
+              onClick={() => onModeChange("cloud-asr-tab")}
             />
           </div>
         </div>

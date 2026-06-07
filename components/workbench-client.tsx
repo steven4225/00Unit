@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   createDefaultCloudAsrSource,
+  type CloudAsrInputKind,
   type CloudAsrRuntime
 } from "../lib/asr/create-default-cloud-asr-source";
 import { summaryResponseSchema, type SummaryResponse } from "../lib/schemas/summarize";
@@ -27,12 +28,12 @@ type SummaryStatus = "idle" | "loading" | "ready" | "error";
 
 type WorkbenchClientProps = {
   createMockSource?: () => TranscriptSource;
-  createCloudAsrSource?: () => CloudAsrRuntime;
+  createCloudAsrSource?: (inputKind: CloudAsrInputKind) => CloudAsrRuntime;
 };
 
 export function WorkbenchClient({
   createMockSource = () => new MockTranscriptSource(),
-  createCloudAsrSource = () => createDefaultCloudAsrSource()
+  createCloudAsrSource = (inputKind) => createDefaultCloudAsrSource({ inputKind })
 }: WorkbenchClientProps) {
   const [inputMode, setInputMode] = useState<InputMode>("mock");
   const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>("idle");
@@ -233,7 +234,7 @@ export function WorkbenchClient({
     setPlaybackStatus("starting");
 
     try {
-      const source = createCloudAsrSource();
+      const source = createCloudAsrSource(resolveCloudAsrInputKind(inputMode));
       cloudSourceRef.current = source;
       let startupInterrupted = false;
 
@@ -325,8 +326,17 @@ export function WorkbenchClient({
   }
 
   const sourceLabel =
-    inputMode === "mock" ? "Mock Transcript Source" : "Browser Mic + Cloud ASR";
-  const modeLabel = inputMode === "mock" ? "Mock Mode" : "Cloud ASR Mode";
+    inputMode === "mock"
+      ? "Mock Transcript Source"
+      : inputMode === "cloud-asr-tab"
+        ? "Browser Tab Audio + Cloud ASR"
+        : "Browser Mic + Cloud ASR";
+  const modeLabel =
+    inputMode === "mock"
+      ? "Mock Mode"
+      : inputMode === "cloud-asr-tab"
+        ? "Cloud ASR Tab Audio Mode"
+        : "Cloud ASR Mic Mode";
   const statusDetail =
     playbackStatus === "playing"
       ? inputMode === "mock"
@@ -372,9 +382,9 @@ export function WorkbenchClient({
           }}
           canStart={playbackStatus !== "playing" && playbackStatus !== "starting"}
           canPause={playbackStatus === "playing" || playbackStatus === "starting"}
-          canRetry={inputMode === "cloud-asr" && realtimeError !== null}
+          canRetry={inputMode !== "mock" && realtimeError !== null}
           isSummaryLoading={summaryStatus === "loading"}
-          isRealtimeStarting={inputMode === "cloud-asr" && playbackStatus === "starting"}
+          isRealtimeStarting={inputMode !== "mock" && playbackStatus === "starting"}
         />
         <SubtitleWorkspace
           items={recentWindow}
@@ -389,6 +399,12 @@ export function WorkbenchClient({
       />
     </div>
   );
+}
+
+function resolveCloudAsrInputKind(inputMode: InputMode): CloudAsrInputKind {
+  return inputMode === "cloud-asr-tab"
+    ? "browser-tab-audio"
+    : "browser-microphone";
 }
 
 function resolveRealtimeErrorMessage(error: unknown) {

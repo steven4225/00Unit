@@ -91,7 +91,8 @@ describe("HomePage", () => {
       screen.getByRole("heading", { level: 2, name: "输入源状态" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始模拟" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cloud ASR" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cloud ASR (Mic)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" })).toBeInTheDocument();
     expect(screen.getByText("主字幕区")).toBeInTheDocument();
     expect(screen.getByText("会后总结")).toBeInTheDocument();
   });
@@ -165,7 +166,7 @@ describe("HomePage", () => {
     render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
       await flushAsyncWork();
     });
 
@@ -174,7 +175,7 @@ describe("HomePage", () => {
       await flushAsyncWork();
     });
 
-    expect(screen.getByText("Cloud ASR Mode")).toBeInTheDocument();
+    expect(screen.getByText("Cloud ASR Mic Mode")).toBeInTheDocument();
     expect(cloudSource.start).toHaveBeenCalledTimes(1);
 
     act(() => {
@@ -206,6 +207,27 @@ describe("HomePage", () => {
     expect(screen.getByText("ZH:real final phrase")).toBeInTheDocument();
   });
 
+  it("creates a tab-audio cloud asr source when tab audio mode starts", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const createCloudAsrSource = vi.fn(() => cloudSource);
+
+    render(<WorkbenchClient createCloudAsrSource={createCloudAsrSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Tab Audio)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("Cloud ASR Tab Audio Mode")).toBeInTheDocument();
+    expect(createCloudAsrSource).toHaveBeenCalledWith("browser-tab-audio");
+    expect(cloudSource.start).toHaveBeenCalledTimes(1);
+  });
+
   it("surfaces cloud asr startup failures and offers a retry path", async () => {
     const failingFactory = vi
       .fn()
@@ -217,7 +239,7 @@ describe("HomePage", () => {
     render(<WorkbenchClient createCloudAsrSource={failingFactory} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
       await flushAsyncWork();
     });
 
@@ -270,7 +292,7 @@ describe("HomePage", () => {
     render(<WorkbenchClient createCloudAsrSource={() => interruptedSource} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR" }));
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
       await flushAsyncWork();
     });
 
