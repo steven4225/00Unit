@@ -25,6 +25,7 @@ import { SummaryPanel } from "./summary-panel";
 
 type PlaybackStatus = "idle" | "starting" | "playing" | "paused";
 type SummaryStatus = "idle" | "loading" | "ready" | "error";
+const DRAFT_PREVIEW_TRANSLATION_DEBOUNCE_MS = 800;
 
 type WorkbenchClientProps = {
   createMockSource?: () => TranscriptSource;
@@ -48,8 +49,10 @@ export function WorkbenchClient({
   const [providerEventCount, setProviderEventCount] = useState(0);
   const [audioLevelPercent, setAudioLevelPercent] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isPreviewTranslating, setIsPreviewTranslating] = useState(false);
   const [activeTranslationId, setActiveTranslationId] = useState<string | null>(null);
   const [blockedTranslationKey, setBlockedTranslationKey] = useState<string | null>(null);
+  const [blockedPreviewTranslationKey, setBlockedPreviewTranslationKey] = useState<string | null>(null);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>("idle");
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -58,6 +61,7 @@ export function WorkbenchClient({
   const cloudSourceRef = useRef<CloudAsrRuntime | null>(null);
   const latestItemsRef = useRef(subtitleState.itemsById);
   const translationAbortRef = useRef<AbortController | null>(null);
+  const previewTranslationAbortRef = useRef<AbortController | null>(null);
 
   if (!mockSourceRef.current) {
     mockSourceRef.current = createMockSource();
@@ -70,6 +74,7 @@ export function WorkbenchClient({
   useEffect(() => {
     return () => {
       translationAbortRef.current?.abort();
+      previewTranslationAbortRef.current?.abort();
       mockSourceRef.current?.pause();
       void stopRealtimeSource(cloudSourceRef.current);
     };
@@ -100,6 +105,27 @@ export function WorkbenchClient({
         .join("\n"),
     [subtitleState]
   );
+
+  const activeDraftPreviewCandidate = useMemo(() => {
+    const latestId =
+      subtitleState.orderedSegmentIds[subtitleState.orderedSegmentIds.length - 1];
+
+    if (!latestId) {
+      return null;
+    }
+
+    const latestItem = subtitleState.itemsById[latestId];
+
+    if (!latestItem || latestItem.status !== "draft") {
+      return null;
+    }
+
+    return {
+      id: latestItem.id,
+      text: latestItem.english,
+      existingChinese: latestItem.chinese
+    };
+  }, [subtitleState]);
 
   useEffect(() => {
     if (pendingTranslations.length === 0 && activeTranslationId === null) {
@@ -187,6 +213,92 @@ export function WorkbenchClient({
     void runTranslation();
   }, [activeTranslationId, blockedTranslationKey, pendingTranslations]);
 
+  useEffect(() => {
+    if (!activeDraftPreviewCandidate) {
+      setIsPreviewTranslating(false);
+      if (blockedPreviewTranslationKey !== null) {
+        setBlockedPreviewTranslationKey(null);
+      }
+      return;
+    }
+
+    const previewTranslationKey = createTranslationRequestKey(
+      activeDraftPreviewCandidate
+    );
+
+    if (
+      blockedPreviewTranslationKey !== null &&
+      blockedPreviewTranslationKey !== previewTranslationKey
+    ) {
+      setBlockedPreviewTranslationKey(null);
+      return;
+    }
+
+    if (blockedPreviewTranslationKey === previewTranslationKey) {
+      setIsPreviewTranslating(false);
+      return;
+    }
+
+    if (activeDraftPreviewCandidate.existingChinese) {
+      setIsPreviewTranslating(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      previewTranslationAbortRef.current?.abort();
+      previewTranslationAbortRef.current = controller;
+
+      void runDraftPreviewTranslation({
+        candidate: activeDraftPreviewCandidate,
+        controller,
+        onApplied: (item) => {
+          if (
+            latestItemsRef.current[item.id]?.english ===
+              activeDraftPreviewCandidate.text &&
+            latestItemsRef.current[item.id]?.status === "draft"
+          ) {
+            dispatch({
+              type: "TRANSLATION_APPLIED",
+              id: item.id,
+              chinese: item.chinese
+            });
+          }
+        },
+        onError: (error) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          setBlockedPreviewTranslationKey(previewTranslationKey);
+          setTranslationError(
+            error instanceof Error
+              ? "中文字幕生成失败，请稍后重试。"
+              : "中文字幕生成失败，请稍后重试。"
+          );
+        },
+        onStart: () => {
+          setIsPreviewTranslating(true);
+          setTranslationError(null);
+        },
+        onFinish: () => {
+          if (previewTranslationAbortRef.current === controller) {
+            previewTranslationAbortRef.current = null;
+          }
+          setIsPreviewTranslating(false);
+        }
+      });
+    }, DRAFT_PREVIEW_TRANSLATION_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (previewTranslationAbortRef.current === controller) {
+        controller.abort();
+        previewTranslationAbortRef.current = null;
+      }
+    };
+  }, [activeDraftPreviewCandidate, blockedPreviewTranslationKey]);
+
   async function stopRealtimeSource(
     target: CloudAsrRuntime | null = cloudSourceRef.current
   ) {
@@ -212,8 +324,10 @@ export function WorkbenchClient({
     });
     setPlaybackStatus("idle");
     setIsTranslating(false);
+    setIsPreviewTranslating(false);
     setActiveTranslationId(null);
     setBlockedTranslationKey(null);
+    setBlockedPreviewTranslationKey(null);
     setTranslationError(null);
     setRealtimeError(null);
     setAudioChunkCount(0);
@@ -405,7 +519,7 @@ export function WorkbenchClient({
         />
         <SubtitleWorkspace
           items={recentWindow}
-          isTranslating={isTranslating}
+          isTranslating={isTranslating || isPreviewTranslating}
           errorMessage={translationError}
         />
       </div>
@@ -442,4 +556,48 @@ function resolveRealtimeErrorMessage(error: unknown) {
 
 function createTranslationRequestKey(item: { id: string; text: string }) {
   return `${item.id}:${item.text}`;
+}
+
+async function runDraftPreviewTranslation(options: {
+  candidate: {
+    id: string;
+    text: string;
+  };
+  controller: AbortController;
+  onApplied: (item: { id: string; chinese: string }) => void;
+  onError: (error: unknown) => void;
+  onStart: () => void;
+  onFinish: () => void;
+}) {
+  const { candidate, controller, onApplied, onError, onStart, onFinish } = options;
+
+  onStart();
+
+  try {
+    const response = await fetch("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        items: [candidate]
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error("Translation request failed");
+    }
+
+    const result = translationResponseSchema.parse(await response.json());
+    result.items.forEach(onApplied);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    onError(error);
+  } finally {
+    onFinish();
+  }
 }

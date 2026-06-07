@@ -416,6 +416,219 @@ describe("HomePage", () => {
     expect(screen.getByText("ZH:second final phrase")).toBeInTheDocument();
   });
 
+  it("shows preview chinese for a stable draft before final translation overwrites it", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const draftTranslation = createDeferred<Response>();
+    const finalTranslation = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+
+      if (!url.endsWith("/api/translate")) {
+        throw new Error(`Unexpected request: ${url}`);
+      }
+
+      if (body.items[0]?.text === "Example two." && fetchMock.mock.calls.length === 1) {
+        return draftTranslation.promise;
+      }
+
+      if (body.items[0]?.text === "Example two.") {
+        return finalTranslation.promise;
+      }
+
+      throw new Error(`Unexpected translation payload: ${JSON.stringify(body)}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-preview",
+        text: "Example two.",
+        isFinal: false,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      draftTranslation.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-preview",
+              chinese: "PREVIEW: 示例二。"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
+    expect(screen.getByText("Draft")).toBeInTheDocument();
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-preview",
+        text: "Example two.",
+        isFinal: true,
+        startMs: 0,
+        endMs: 1200,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      finalTranslation.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-preview",
+              chinese: "FINAL: 示例二。"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("FINAL: 示例二。")).toBeInTheDocument();
+  });
+
+  it("re-runs preview translation when the active draft text grows", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const firstPreview = createDeferred<Response>();
+    const secondPreview = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+
+      if (!url.endsWith("/api/translate")) {
+        throw new Error(`Unexpected request: ${url}`);
+      }
+
+      if (body.items[0]?.text === "Example two.") {
+        return firstPreview.promise;
+      }
+
+      if (body.items[0]?.text === "Example two. More detail.") {
+        return secondPreview.promise;
+      }
+
+      throw new Error(`Unexpected translation payload: ${JSON.stringify(body)}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-growing",
+        text: "Example two.",
+        isFinal: false,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      firstPreview.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-growing",
+              chinese: "PREVIEW: 示例二。"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("PREVIEW: 示例二。")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-growing",
+        text: "Example two. More detail.",
+        isFinal: false,
+        startMs: 0,
+        endMs: 1400,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await flushAsyncWork();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      secondPreview.resolve(
+        createJsonResponse({
+          items: [
+            {
+              id: "cloud-seg-growing",
+              chinese: "PREVIEW: 示例二，补充内容。"
+            }
+          ]
+        })
+      );
+      await flushAsyncWork();
+    });
+
+    expect(screen.getByText("PREVIEW: 示例二，补充内容。")).toBeInTheDocument();
+  });
+
   it("surfaces cloud asr startup failures and offers a retry path", async () => {
     const failingFactory = vi
       .fn()
