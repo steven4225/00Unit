@@ -9,12 +9,14 @@ type ControlBarProps = {
   onPause: () => void;
   onReset: () => void;
   onGenerateSummary: () => void;
+  onOpenSubtitleMonitor: () => void;
   onRetry: () => void;
   canStart: boolean;
   canPause: boolean;
   canRetry: boolean;
   isSummaryLoading: boolean;
   isRealtimeStarting: boolean;
+  monitorErrorMessage?: string | null;
 };
 
 export function ControlBar({
@@ -24,12 +26,14 @@ export function ControlBar({
   onPause,
   onReset,
   onGenerateSummary,
+  onOpenSubtitleMonitor,
   onRetry,
   canStart,
   canPause,
   canRetry,
   isSummaryLoading,
-  isRealtimeStarting
+  isRealtimeStarting,
+  monitorErrorMessage
 }: ControlBarProps) {
   const startButtonLabel =
     inputMode === "mock"
@@ -108,6 +112,13 @@ export function ControlBar({
           </button>
           <button
             type="button"
+            onClick={onOpenSubtitleMonitor}
+            className="rounded-full border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-900 shadow-sm transition hover:border-violet-300"
+          >
+            打开字幕窗
+          </button>
+          <button
+            type="button"
             onClick={onGenerateSummary}
             disabled={isSummaryLoading}
             className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 shadow-sm transition hover:border-amber-300 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
@@ -124,6 +135,15 @@ export function ControlBar({
             </button>
           ) : null}
         </div>
+
+        {monitorErrorMessage ? (
+          <p
+            role="alert"
+            className="rounded-[18px] border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800"
+          >
+            {monitorErrorMessage}
+          </p>
+        ) : null}
       </div>
     </section>
   );

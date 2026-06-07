@@ -2,6 +2,7 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkbenchClient } from "../components/workbench-client";
+import { SUBTITLE_MONITOR_CHANNEL_NAME } from "../lib/subtitle/subtitle-monitor-channel";
 import HomePage from "./page";
 
 const SEGMENT_ONE_FINAL = "Today I want to talk about small language models.";
@@ -83,9 +84,25 @@ class FakeCloudAsrSource {
   }
 }
 
+class FakeBroadcastChannel {
+  static instances: FakeBroadcastChannel[] = [];
+
+  readonly name: string;
+  readonly postMessage = vi.fn();
+  readonly close = vi.fn();
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+
+  constructor(name: string) {
+    this.name = name;
+    FakeBroadcastChannel.instances.push(this);
+  }
+}
+
 describe("HomePage", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    FakeBroadcastChannel.instances = [];
+    vi.stubGlobal("BroadcastChannel", FakeBroadcastChannel);
   });
 
   afterEach(() => {
@@ -337,6 +354,92 @@ describe("HomePage", () => {
     expect(screen.getByText("tab audio")).toBeInTheDocument();
     expect(screen.getByText("shared audio")).toBeInTheDocument();
     expect(createCloudAsrSource).toHaveBeenCalledWith("browser-tab-audio");
+  });
+
+  it("opens a subtitle monitor window and broadcasts recent subtitles", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    const windowOpenMock = vi.fn(() => ({
+      focus: vi.fn()
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+
+      if (!url.endsWith("/api/translate")) {
+        throw new Error(`Unexpected request: ${url}`);
+      }
+
+      return createJsonResponse({
+        items: body.items.map((item: { id: string; text: string }) => ({
+          id: item.id,
+          chinese: `ZH:${item.text}`
+        }))
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("open", windowOpenMock);
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开字幕窗" }));
+
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      "/subtitle-monitor",
+      "subtitle-monitor",
+      expect.stringContaining("width=520")
+    );
+    expect(FakeBroadcastChannel.instances).toHaveLength(1);
+    expect(FakeBroadcastChannel.instances[0]?.name).toBe(
+      SUBTITLE_MONITOR_CHANNEL_NAME
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "开始实时输入" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-monitor",
+        text: "monitor final phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    expect(FakeBroadcastChannel.instances[0]?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modeLabel: "Cloud ASR Mic Mode",
+        statusDetail: "Listening",
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: "cloud-seg-monitor",
+            english: "monitor final phrase"
+          })
+        ])
+      })
+    );
+  });
+
+  it("shows an error when the subtitle monitor popup is blocked", () => {
+    vi.stubGlobal("open", vi.fn(() => null));
+
+    render(<WorkbenchClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开字幕窗" }));
+
+    expect(
+      screen.getByText("字幕窗被浏览器拦截，请允许弹窗后重试。")
+    ).toBeInTheDocument();
   });
 
   it("serializes final-segment translation requests instead of interrupting the in-flight one", async () => {
