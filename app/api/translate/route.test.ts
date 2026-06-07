@@ -3,7 +3,7 @@ import { POST } from "./route";
 
 const translateSegmentsMock = vi.fn();
 
-vi.mock("../../../lib/openai/translate", () => ({
+vi.mock("../../../lib/llm/translate", () => ({
   translateSegments: (...args: unknown[]) => translateSegmentsMock(...args)
 }));
 

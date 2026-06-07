@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { summarizeTranscript } from "../../../lib/openai/summarize";
+import { summarizeTranscript } from "../../../lib/llm/summarize";
 import { summaryRequestSchema } from "../../../lib/schemas/summarize";
 
 export async function POST(request: Request) {
