@@ -3,7 +3,7 @@ import { POST } from "./route";
 
 const summarizeTranscriptMock = vi.fn();
 
-vi.mock("../../../lib/openai/summarize", () => ({
+vi.mock("../../../lib/llm/summarize", () => ({
   summarizeTranscript: (...args: unknown[]) => summarizeTranscriptMock(...args)
 }));
 

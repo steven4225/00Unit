@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { translateSegments } from "../../../lib/llm/translate";
 import { translationRequestSchema } from "../../../lib/schemas/translate";
-import { translateSegments } from "../../../lib/openai/translate";
 
 export async function POST(request: Request) {
   try {
