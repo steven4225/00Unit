@@ -11,7 +11,7 @@ function buildSummaryMessages(input: SummaryRequest) {
     {
       role: "system" as const,
       content:
-        "You summarize English speech transcripts into Chinese. Return strict JSON in the shape {\"summary\":\"...\",\"keywords\":[\"...\"],\"uncertainTerms\":[\"...\"]}. Keep the result concise and do not add commentary outside JSON."
+        "You summarize speech transcripts into Chinese. Automatically identify the source language of the transcript before summarizing. Return strict JSON in the shape {\"summary\":\"...\",\"keywords\":[\"...\"],\"uncertainTerms\":[\"...\"]}. Keep the result concise and do not add commentary outside JSON."
     },
     {
       role: "user" as const,

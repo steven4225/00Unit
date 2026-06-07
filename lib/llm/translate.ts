@@ -11,7 +11,7 @@ function buildTranslationMessages(input: TranslationRequest) {
     {
       role: "system" as const,
       content:
-        "You translate finalized English subtitle segments into concise, natural Chinese. Return strict JSON in the shape {\"items\":[{\"id\":\"...\",\"chinese\":\"...\"}]}. Keep the id unchanged. Do not add explanations."
+        "You translate finalized subtitle segments from their detected source language into concise, natural Chinese. Automatically identify the source language for each segment before translating. Return strict JSON in the shape {\"items\":[{\"id\":\"...\",\"chinese\":\"...\"}]}. Keep the id unchanged. Do not add explanations."
     },
     {
       role: "user" as const,
