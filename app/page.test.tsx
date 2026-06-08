@@ -773,7 +773,12 @@ describe("HomePage", () => {
     expect(screen.getByText("Chinese")).toBeInTheDocument();
     expect(screen.getByText("language neutral source text")).toBeInTheDocument();
     expect(screen.getByText("语言中立的中文内容")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "开始实时输入" })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "暂停" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重置" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "生成总结" })).not.toBeInTheDocument();
   });
 
   it("replaces monitor snapshot content instead of persisting old transcript text", () => {
@@ -829,6 +834,151 @@ describe("HomePage", () => {
 
     expect(screen.queryByText("old snapshot source text")).not.toBeInTheDocument();
     expect(screen.getByText("new snapshot source text")).toBeInTheDocument();
+  });
+
+  it("lets the subtitle monitor switch between bilingual, source-only, and Chinese-only views locally", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "display-mode-session",
+          items: [
+            {
+              id: "display-mode-item",
+              english: "display mode source text",
+              chinese: "显示模式中文",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("display mode source text")).toBeInTheDocument();
+    expect(screen.getByText("显示模式中文")).toBeInTheDocument();
+
+    channel?.postMessage.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Chinese only" }));
+
+    expect(screen.queryByText("display mode source text")).not.toBeInTheDocument();
+    expect(screen.getByText("显示模式中文")).toBeInTheDocument();
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Source only" }));
+
+    expect(screen.getByText("display mode source text")).toBeInTheDocument();
+    expect(screen.queryByText("显示模式中文")).not.toBeInTheDocument();
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Bilingual" }));
+
+    expect(screen.getByText("display mode source text")).toBeInTheDocument();
+    expect(screen.getByText("显示模式中文")).toBeInTheDocument();
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("lets the subtitle monitor change text size without changing workbench state", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "text-size-session",
+          items: [
+            {
+              id: "text-size-item",
+              english: "text size source",
+              chinese: "字号中文",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    const sourceText = screen.getByText("text size source");
+
+    expect(sourceText).toHaveClass("text-2xl");
+
+    channel?.postMessage.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Large text" }));
+
+    expect(sourceText).toHaveClass("text-3xl");
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Compact text" }));
+
+    expect(sourceText).toHaveClass("text-xl");
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("lets the subtitle monitor choose one-item or two-item views locally", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "visible-count-session",
+          items: [
+            {
+              id: "previous-count-item",
+              english: "previous visible source",
+              chinese: "上一句中文",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            },
+            {
+              id: "current-count-item",
+              english: "current visible source",
+              chinese: "当前句中文",
+              status: "final",
+              startMs: 1000,
+              endMs: 2000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("previous visible source")).toBeInTheDocument();
+    expect(screen.getByText("current visible source")).toBeInTheDocument();
+
+    channel?.postMessage.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Latest only" }));
+
+    expect(screen.queryByText("previous visible source")).not.toBeInTheDocument();
+    expect(screen.getByText("current visible source")).toBeInTheDocument();
+    expect(channel?.postMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Latest two" }));
+
+    expect(screen.getByText("previous visible source")).toBeInTheDocument();
+    expect(screen.getByText("current visible source")).toBeInTheDocument();
+    expect(channel?.postMessage).not.toHaveBeenCalled();
   });
 
   it("shows an error when the subtitle monitor popup is blocked", () => {
