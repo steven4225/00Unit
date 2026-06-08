@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  isSubtitleMonitorMessage,
+  type SubtitleMonitorMessage,
   type SubtitleMonitorSnapshot,
   SUBTITLE_MONITOR_CHANNEL_NAME
 } from "../../lib/subtitle/subtitle-monitor-channel";
 
 const initialSnapshot: SubtitleMonitorSnapshot = {
+  sessionId: "subtitle-monitor-initial",
   items: [],
   isTranslating: false,
   modeLabel: "Subtitle Monitor",
@@ -14,8 +17,8 @@ const initialSnapshot: SubtitleMonitorSnapshot = {
 };
 
 export default function SubtitleMonitorPage() {
-  const [snapshot, setSnapshot] =
-    useState<SubtitleMonitorSnapshot>(initialSnapshot);
+  const [snapshot, setSnapshot] = useState<SubtitleMonitorSnapshot>(initialSnapshot);
+  const activeSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") {
@@ -23,8 +26,45 @@ export default function SubtitleMonitorPage() {
     }
 
     const channel = new BroadcastChannel(SUBTITLE_MONITOR_CHANNEL_NAME);
-    channel.onmessage = (event: MessageEvent<SubtitleMonitorSnapshot>) => {
-      setSnapshot(event.data);
+    channel.postMessage({
+      type: "monitor-ready"
+    } satisfies SubtitleMonitorMessage);
+    channel.postMessage({
+      type: "request-snapshot"
+    } satisfies SubtitleMonitorMessage);
+
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      const message = event.data;
+
+      if (!isSubtitleMonitorMessage(message)) {
+        return;
+      }
+
+      if (message.type === "session-reset") {
+        activeSessionIdRef.current = message.sessionId;
+        setSnapshot({
+          sessionId: message.sessionId,
+          items: [],
+          isTranslating: false,
+          modeLabel: message.modeLabel,
+          statusDetail: message.statusDetail
+        });
+        return;
+      }
+
+      if (message.type !== "snapshot") {
+        return;
+      }
+
+      if (
+        activeSessionIdRef.current !== null &&
+        activeSessionIdRef.current !== message.snapshot.sessionId
+      ) {
+        return;
+      }
+
+      activeSessionIdRef.current = message.snapshot.sessionId;
+      setSnapshot(message.snapshot);
     };
 
     return () => {

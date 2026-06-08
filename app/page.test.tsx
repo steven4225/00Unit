@@ -2,8 +2,13 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkbenchClient } from "../components/workbench-client";
-import { SUBTITLE_MONITOR_CHANNEL_NAME } from "../lib/subtitle/subtitle-monitor-channel";
+import {
+  isSubtitleMonitorMessage,
+  SUBTITLE_MONITOR_CHANNEL_NAME,
+  type SubtitleMonitorMessage
+} from "../lib/subtitle/subtitle-monitor-channel";
 import HomePage from "./page";
+import SubtitleMonitorPage from "./subtitle-monitor/page";
 
 const SEGMENT_ONE_FINAL = "Today I want to talk about small language models.";
 const SEGMENT_TWO_CORRECTED =
@@ -51,6 +56,24 @@ async function flushAsyncWork() {
   await Promise.resolve();
 }
 
+function createTranslationFetchMock() {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const body = JSON.parse(String(init?.body ?? "{}"));
+
+    if (!url.endsWith("/api/translate")) {
+      throw new Error(`Unexpected request: ${url}`);
+    }
+
+    return createJsonResponse({
+      items: body.items.map((item: { id: string; text: string }) => ({
+        id: item.id,
+        chinese: `ZH:${item.text}`
+      }))
+    });
+  });
+}
+
 class FakeCloudAsrSource {
   callbacks:
     | {
@@ -96,6 +119,35 @@ class FakeBroadcastChannel {
     this.name = name;
     FakeBroadcastChannel.instances.push(this);
   }
+
+  dispatch(data: unknown) {
+    this.onmessage?.({ data } as MessageEvent<unknown>);
+  }
+}
+
+function getPostedMonitorMessages(channel: FakeBroadcastChannel | undefined) {
+  return (channel?.postMessage.mock.calls ?? [])
+    .map(([message]) => message)
+    .filter(isSubtitleMonitorMessage);
+}
+
+function findPostedMonitorMessage<T extends SubtitleMonitorMessage["type"]>(
+  channel: FakeBroadcastChannel | undefined,
+  type: T
+) {
+  return getPostedMonitorMessages(channel).find(
+    (message): message is Extract<SubtitleMonitorMessage, { type: T }> =>
+      message.type === type
+  );
+}
+
+function findLastPostedSnapshot(channel: FakeBroadcastChannel | undefined) {
+  return getPostedMonitorMessages(channel).findLast(
+    (
+      message
+    ): message is Extract<SubtitleMonitorMessage, { type: "snapshot" }> =>
+      message.type === "snapshot"
+  );
 }
 
 describe("HomePage", () => {
@@ -416,16 +468,278 @@ describe("HomePage", () => {
 
     expect(FakeBroadcastChannel.instances[0]?.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        modeLabel: "Cloud ASR Mic Mode",
-        statusDetail: "Listening",
-        items: expect.arrayContaining([
-          expect.objectContaining({
-            id: "cloud-seg-monitor",
-            english: "monitor final phrase"
-          })
-        ])
+        type: "snapshot",
+        snapshot: expect.objectContaining({
+          sessionId: expect.any(String),
+          modeLabel: "Cloud ASR Mic Mode",
+          statusDetail: "Listening",
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              id: "cloud-seg-monitor",
+              english: "monitor final phrase"
+            })
+          ])
+        })
       })
     );
+  });
+
+  it("clears subtitle monitor content when the workbench session resets", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    vi.stubGlobal("fetch", createTranslationFetchMock());
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-monitor-reset",
+        text: "old monitor phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    const channel = FakeBroadcastChannel.instances[0];
+    const lastSnapshotMessage = findLastPostedSnapshot(channel);
+
+    expect(lastSnapshotMessage).toBeDefined();
+    const previousSessionId = lastSnapshotMessage?.snapshot.sessionId;
+
+    channel?.postMessage.mockClear();
+
+    await act(async () => {
+      fireEvent.click(getButtons().resetButton);
+      await flushAsyncWork();
+    });
+
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session-reset",
+        sessionId: expect.any(String)
+      })
+    );
+    const resetMessage = findPostedMonitorMessage(channel, "session-reset");
+
+    expect(resetMessage?.sessionId).not.toBe(previousSessionId);
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "snapshot",
+        snapshot: expect.objectContaining({
+          sessionId: expect.any(String),
+          items: []
+        })
+      })
+    );
+  });
+
+  it("advances monitor sessions on mode changes and new realtime starts", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+    channel?.postMessage.mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    const modeResetMessage = findPostedMonitorMessage(channel, "session-reset");
+
+    expect(modeResetMessage?.sessionId).toEqual(expect.any(String));
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "snapshot",
+        snapshot: expect.objectContaining({
+          sessionId: modeResetMessage?.sessionId,
+          items: []
+        })
+      })
+    );
+
+    channel?.postMessage.mockClear();
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    const startResetMessage = findPostedMonitorMessage(channel, "session-reset");
+
+    expect(startResetMessage?.sessionId).toEqual(expect.any(String));
+    expect(startResetMessage?.sessionId).not.toBe(modeResetMessage?.sessionId);
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "snapshot",
+        snapshot: expect.objectContaining({
+          sessionId: startResetMessage?.sessionId,
+          items: []
+        })
+      })
+    );
+  });
+
+  it("responds to subtitle monitor snapshot requests with the current subtitle state", async () => {
+    const cloudSource = new FakeCloudAsrSource();
+    vi.stubGlobal("fetch", createTranslationFetchMock());
+
+    render(<WorkbenchClient createCloudAsrSource={() => cloudSource} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cloud ASR (Mic)" }));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      fireEvent.click(getButtons().startButton);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      cloudSource.emit({
+        id: "cloud-seg-request-snapshot",
+        text: "current request snapshot phrase",
+        isFinal: true,
+        startMs: 0,
+        endMs: 900,
+        source: "cloud-asr"
+      });
+      await flushAsyncWork();
+    });
+
+    const channel = FakeBroadcastChannel.instances[0];
+    channel?.postMessage.mockClear();
+
+    act(() => {
+      channel?.dispatch({
+        type: "request-snapshot"
+      });
+    });
+
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "snapshot",
+        snapshot: expect.objectContaining({
+          sessionId: expect.any(String),
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              id: "cloud-seg-request-snapshot",
+              english: "current request snapshot phrase"
+            })
+          ])
+        })
+      })
+    );
+  });
+
+  it("subtitle monitor requests current snapshots and ignores stale sessions", async () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    expect(channel?.postMessage).toHaveBeenCalledWith({
+      type: "monitor-ready"
+    });
+    expect(channel?.postMessage).toHaveBeenCalledWith({
+      type: "request-snapshot"
+    });
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "session-1",
+          items: [
+            {
+              id: "old-item",
+              english: "old source text",
+              chinese: "old chinese text",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("old source text")).toBeInTheDocument();
+
+    act(() => {
+      channel?.dispatch({
+        type: "session-reset",
+        sessionId: "session-2",
+        modeLabel: "Cloud ASR Tab Audio Mode",
+        statusDetail: "Standby"
+      });
+    });
+
+    expect(screen.queryByText("old source text")).not.toBeInTheDocument();
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "session-1",
+          items: [
+            {
+              id: "stale-item",
+              english: "stale source text",
+              chinese: "stale chinese text",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.queryByText("stale source text")).not.toBeInTheDocument();
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "session-2",
+          items: [
+            {
+              id: "new-item",
+              english: "new source text",
+              chinese: "new chinese text",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("new source text")).toBeInTheDocument();
   });
 
   it("shows an error when the subtitle monitor popup is blocked", () => {
