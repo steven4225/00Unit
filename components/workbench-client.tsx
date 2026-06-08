@@ -14,7 +14,14 @@ import {
   createInitialSubtitleSessionState,
   subtitleSessionReducer
 } from "../lib/subtitle/reducer";
-import { type SubtitleMonitorSnapshot, SUBTITLE_MONITOR_CHANNEL_NAME, SUBTITLE_MONITOR_WINDOW_PATH } from "../lib/subtitle/subtitle-monitor-channel";
+import {
+  createSubtitleMonitorSessionId,
+  isSubtitleMonitorMessage,
+  type SubtitleMonitorMessage,
+  type SubtitleMonitorSnapshot,
+  SUBTITLE_MONITOR_CHANNEL_NAME,
+  SUBTITLE_MONITOR_WINDOW_PATH
+} from "../lib/subtitle/subtitle-monitor-channel";
 import {
   selectRecentSubtitleWindow,
   selectSegmentsPendingTranslation
@@ -58,6 +65,9 @@ export function WorkbenchClient({
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [monitorErrorMessage, setMonitorErrorMessage] = useState<string | null>(null);
+  const [subtitleMonitorSessionId, setSubtitleMonitorSessionId] = useState(() =>
+    createSubtitleMonitorSessionId()
+  );
 
   const mockSourceRef = useRef<TranscriptSource | null>(null);
   const cloudSourceRef = useRef<CloudAsrRuntime | null>(null);
@@ -65,6 +75,9 @@ export function WorkbenchClient({
   const translationAbortRef = useRef<AbortController | null>(null);
   const previewTranslationAbortRef = useRef<AbortController | null>(null);
   const subtitleMonitorChannelRef = useRef<BroadcastChannel | null>(null);
+  const subtitleMonitorSessionIdRef = useRef(subtitleMonitorSessionId);
+  const latestSubtitleMonitorSnapshotRef =
+    useRef<SubtitleMonitorSnapshot | null>(null);
 
   if (!mockSourceRef.current) {
     mockSourceRef.current = createMockSource();
@@ -73,6 +86,10 @@ export function WorkbenchClient({
   useEffect(() => {
     latestItemsRef.current = subtitleState.itemsById;
   }, [subtitleState.itemsById]);
+
+  useEffect(() => {
+    subtitleMonitorSessionIdRef.current = subtitleMonitorSessionId;
+  }, [subtitleMonitorSessionId]);
 
   useEffect(() => {
     return () => {
@@ -319,9 +336,47 @@ export function WorkbenchClient({
     }
   }
 
+  function postSubtitleMonitorMessage(message: SubtitleMonitorMessage) {
+    subtitleMonitorChannelRef.current?.postMessage(message);
+  }
+
+  function beginSubtitleMonitorSession({
+    modeLabel: nextModeLabel = modeLabel,
+    statusDetail: nextStatusDetail = statusDetail
+  }: {
+    modeLabel?: string;
+    statusDetail?: string;
+  } = {}) {
+    const nextSessionId = createSubtitleMonitorSessionId();
+    const snapshot: SubtitleMonitorSnapshot = {
+      sessionId: nextSessionId,
+      items: [],
+      isTranslating: false,
+      modeLabel: nextModeLabel,
+      statusDetail: nextStatusDetail
+    };
+
+    subtitleMonitorSessionIdRef.current = nextSessionId;
+    latestSubtitleMonitorSnapshotRef.current = snapshot;
+    setSubtitleMonitorSessionId(nextSessionId);
+    postSubtitleMonitorMessage({
+      type: "session-reset",
+      sessionId: nextSessionId,
+      modeLabel: nextModeLabel,
+      statusDetail: nextStatusDetail
+    });
+    postSubtitleMonitorMessage({
+      type: "snapshot",
+      snapshot
+    });
+  }
+
   async function resetSessionState() {
     translationAbortRef.current?.abort();
     mockSourceRef.current?.reset();
+    beginSubtitleMonitorSession({
+      statusDetail: "Standby"
+    });
     await stopRealtimeSource(cloudSourceRef.current);
     dispatch({
       type: "SESSION_RESET"
@@ -365,6 +420,21 @@ export function WorkbenchClient({
       setPlaybackStatus("playing");
       return;
     }
+
+    beginSubtitleMonitorSession({
+      statusDetail: "Connecting"
+    });
+    dispatch({
+      type: "SESSION_RESET"
+    });
+    setAudioChunkCount(0);
+    setProviderEventCount(0);
+    setAudioLevelPercent(0);
+    setIsTranslating(false);
+    setIsPreviewTranslating(false);
+    setActiveTranslationId(null);
+    setBlockedTranslationKey(null);
+    setBlockedPreviewTranslationKey(null);
 
     setPlaybackStatus("starting");
 
@@ -490,6 +560,35 @@ export function WorkbenchClient({
 
     const channel = new BroadcastChannel(SUBTITLE_MONITOR_CHANNEL_NAME);
     subtitleMonitorChannelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      const message = event.data;
+
+      if (!isSubtitleMonitorMessage(message)) {
+        return;
+      }
+
+      if (
+        message.type !== "monitor-ready" &&
+        message.type !== "request-snapshot"
+      ) {
+        return;
+      }
+
+      const snapshot =
+        latestSubtitleMonitorSnapshotRef.current ?? {
+          sessionId: subtitleMonitorSessionIdRef.current,
+          items: recentWindow,
+          isTranslating: isTranslating || isPreviewTranslating,
+          modeLabel,
+          statusDetail
+        };
+
+      latestSubtitleMonitorSnapshotRef.current = snapshot;
+      channel.postMessage({
+        type: "snapshot",
+        snapshot
+      });
+    };
 
     return () => {
       channel.close();
@@ -501,18 +600,24 @@ export function WorkbenchClient({
 
   useEffect(() => {
     const snapshot: SubtitleMonitorSnapshot = {
+      sessionId: subtitleMonitorSessionId,
       items: recentWindow,
       isTranslating: isTranslating || isPreviewTranslating,
       modeLabel,
       statusDetail
     };
 
-    subtitleMonitorChannelRef.current?.postMessage(snapshot);
+    latestSubtitleMonitorSnapshotRef.current = snapshot;
+    postSubtitleMonitorMessage({
+      type: "snapshot",
+      snapshot
+    });
   }, [
     isPreviewTranslating,
     isTranslating,
     modeLabel,
     recentWindow,
+    subtitleMonitorSessionId,
     statusDetail
   ]);
 
@@ -564,12 +669,20 @@ export function WorkbenchClient({
 
             setMonitorErrorMessage(null);
             monitorWindow.focus();
-            subtitleMonitorChannelRef.current?.postMessage({
-              items: recentWindow,
-              isTranslating: isTranslating || isPreviewTranslating,
-              modeLabel,
-              statusDetail
-            } satisfies SubtitleMonitorSnapshot);
+            const snapshot =
+              latestSubtitleMonitorSnapshotRef.current ?? {
+                sessionId: subtitleMonitorSessionIdRef.current,
+                items: recentWindow,
+                isTranslating: isTranslating || isPreviewTranslating,
+                modeLabel,
+                statusDetail
+              };
+
+            latestSubtitleMonitorSnapshotRef.current = snapshot;
+            postSubtitleMonitorMessage({
+              type: "snapshot",
+              snapshot
+            });
           }}
           onRetry={() => {
             void handleStart();
