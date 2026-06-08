@@ -16,9 +16,41 @@ const initialSnapshot: SubtitleMonitorSnapshot = {
   statusDetail: "Waiting for workbench"
 };
 
+type MonitorDisplayMode = "bilingual" | "source" | "chinese";
+type MonitorTextSize = "compact" | "comfort" | "large";
+type MonitorVisibleCount = 1 | 2;
+
+const sourceTextSizeClass: Record<MonitorTextSize, string> = {
+  compact: "text-xl leading-8",
+  comfort: "text-2xl leading-9",
+  large: "text-3xl leading-10"
+};
+
+const chineseTextSizeClass: Record<MonitorTextSize, string> = {
+  compact: "text-base leading-7",
+  comfort: "text-lg leading-8",
+  large: "text-2xl leading-9"
+};
+
 export default function SubtitleMonitorPage() {
   const [snapshot, setSnapshot] = useState<SubtitleMonitorSnapshot>(initialSnapshot);
+  const [displayMode, setDisplayMode] =
+    useState<MonitorDisplayMode>("bilingual");
+  const [textSize, setTextSize] = useState<MonitorTextSize>("comfort");
+  const [visibleCount, setVisibleCount] = useState<MonitorVisibleCount>(2);
   const activeSessionIdRef = useRef<string | null>(null);
+  const visibleItems = snapshot.items.slice(-visibleCount);
+  const showSourceText = displayMode === "bilingual" || displayMode === "source";
+  const showChineseText =
+    displayMode === "bilingual" || displayMode === "chinese";
+
+  function getControlButtonClass(isActive: boolean) {
+    return `rounded-full border px-3 py-1 text-xs font-semibold transition ${
+      isActive
+        ? "border-sky-300/70 bg-sky-300/20 text-white"
+        : "border-white/10 bg-white/5 text-slate-300 hover:border-white/25 hover:bg-white/10"
+    }`;
+  }
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") {
@@ -96,16 +128,111 @@ export default function SubtitleMonitorPage() {
           </p>
         </header>
 
+        <section
+          aria-label="Subtitle monitor display controls"
+          className="rounded-[24px] border border-white/10 bg-white/[0.04] px-5 py-4"
+        >
+          <div className="grid gap-3 text-xs text-slate-300 sm:grid-cols-3">
+            <div>
+              <p className="mb-2 font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Display
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={displayMode === "bilingual"}
+                  className={getControlButtonClass(displayMode === "bilingual")}
+                  onClick={() => setDisplayMode("bilingual")}
+                >
+                  Bilingual
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={displayMode === "source"}
+                  className={getControlButtonClass(displayMode === "source")}
+                  onClick={() => setDisplayMode("source")}
+                >
+                  Source only
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={displayMode === "chinese"}
+                  className={getControlButtonClass(displayMode === "chinese")}
+                  onClick={() => setDisplayMode("chinese")}
+                >
+                  Chinese only
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Text size
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={textSize === "compact"}
+                  className={getControlButtonClass(textSize === "compact")}
+                  onClick={() => setTextSize("compact")}
+                >
+                  Compact text
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={textSize === "comfort"}
+                  className={getControlButtonClass(textSize === "comfort")}
+                  onClick={() => setTextSize("comfort")}
+                >
+                  Comfort text
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={textSize === "large"}
+                  className={getControlButtonClass(textSize === "large")}
+                  onClick={() => setTextSize("large")}
+                >
+                  Large text
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Recent items
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={visibleCount === 1}
+                  className={getControlButtonClass(visibleCount === 1)}
+                  onClick={() => setVisibleCount(1)}
+                >
+                  Latest only
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={visibleCount === 2}
+                  className={getControlButtonClass(visibleCount === 2)}
+                  onClick={() => setVisibleCount(2)}
+                >
+                  Latest two
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="flex flex-col gap-3">
-          {snapshot.items.length === 0 ? (
+          {visibleItems.length === 0 ? (
             <article className="rounded-[24px] border border-dashed border-white/15 bg-white/[0.03] px-5 py-6 text-sm leading-6 text-slate-300">
               Start realtime input in the main workbench and the latest subtitle
               pair will appear here.
             </article>
           ) : null}
 
-          {snapshot.items.map((item, index) => {
-            const isNewest = index === snapshot.items.length - 1;
+          {visibleItems.map((item, index) => {
+            const isNewest = index === visibleItems.length - 1;
 
             return (
               <article
@@ -124,21 +251,25 @@ export default function SubtitleMonitorPage() {
                     {item.status}
                   </span>
                 </div>
-                <p className="text-2xl font-semibold leading-9 text-white">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Source text
-                  </span>
-                  {item.english}
-                </p>
-                <p className="mt-3 text-lg leading-8 text-slate-200">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Chinese
-                  </span>
-                  {item.chinese ??
-                    (item.status === "draft"
-                      ? "Chinese preview will appear after the current line stabilizes."
-                      : "Chinese translation is being generated...")}
-                </p>
+                {showSourceText ? (
+                  <p className={`${sourceTextSizeClass[textSize]} font-semibold text-white`}>
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      Source text
+                    </span>
+                    {item.english}
+                  </p>
+                ) : null}
+                {showChineseText ? (
+                  <p className={`mt-3 ${chineseTextSizeClass[textSize]} text-slate-200`}>
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      Chinese
+                    </span>
+                    {item.chinese ??
+                      (item.status === "draft"
+                        ? "Chinese preview will appear after the current line stabilizes."
+                        : "Chinese translation is being generated...")}
+                  </p>
+                ) : null}
               </article>
             );
           })}
