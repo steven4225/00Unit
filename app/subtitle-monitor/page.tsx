@@ -125,9 +125,15 @@ export default function SubtitleMonitorPage() {
                   </span>
                 </div>
                 <p className="text-2xl font-semibold leading-9 text-white">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Source text
+                  </span>
                   {item.english}
                 </p>
                 <p className="mt-3 text-lg leading-8 text-slate-200">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Chinese
+                  </span>
                   {item.chinese ??
                     (item.status === "draft"
                       ? "Chinese preview will appear after the current line stabilizes."
