@@ -981,6 +981,28 @@ describe("HomePage", () => {
     expect(channel?.postMessage).not.toHaveBeenCalled();
   });
 
+  it("presents monitor controls as local-only display settings", () => {
+    render(<SubtitleMonitorPage />);
+
+    expect(screen.getByText("Local view only")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "These controls only change this pop-out window. They do not affect the main workbench."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("shows a clearer empty state while waiting for a workbench snapshot", () => {
+    render(<SubtitleMonitorPage />);
+
+    expect(screen.getByText("Waiting for subtitles")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Open the main workbench, start realtime input, then keep this window near your video."
+      )
+    ).toBeInTheDocument();
+  });
+
   it("shows an error when the subtitle monitor popup is blocked", () => {
     vi.stubGlobal("open", vi.fn(() => null));
 
