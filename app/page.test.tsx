@@ -742,6 +742,95 @@ describe("HomePage", () => {
     expect(screen.getByText("new source text")).toBeInTheDocument();
   });
 
+  it("keeps the subtitle monitor display-only with language-neutral subtitle labels", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "display-only-session",
+          items: [
+            {
+              id: "display-only-item",
+              english: "language neutral source text",
+              chinese: "语言中立的中文内容",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("Source text")).toBeInTheDocument();
+    expect(screen.getByText("Chinese")).toBeInTheDocument();
+    expect(screen.getByText("language neutral source text")).toBeInTheDocument();
+    expect(screen.getByText("语言中立的中文内容")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("replaces monitor snapshot content instead of persisting old transcript text", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "replace-session",
+          items: [
+            {
+              id: "old-snapshot-item",
+              english: "old snapshot source text",
+              chinese: "旧快照中文",
+              status: "final",
+              startMs: 0,
+              endMs: 1000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.getByText("old snapshot source text")).toBeInTheDocument();
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "replace-session",
+          items: [
+            {
+              id: "new-snapshot-item",
+              english: "new snapshot source text",
+              chinese: "新快照中文",
+              status: "final",
+              startMs: 1000,
+              endMs: 2000
+            }
+          ],
+          isTranslating: false,
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening"
+        }
+      });
+    });
+
+    expect(screen.queryByText("old snapshot source text")).not.toBeInTheDocument();
+    expect(screen.getByText("new snapshot source text")).toBeInTheDocument();
+  });
+
   it("shows an error when the subtitle monitor popup is blocked", () => {
     vi.stubGlobal("open", vi.fn(() => null));
 
