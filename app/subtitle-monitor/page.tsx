@@ -130,9 +130,20 @@ export default function SubtitleMonitorPage() {
 
         <section
           aria-label="Subtitle monitor display controls"
-          className="rounded-[24px] border border-white/10 bg-white/[0.04] px-5 py-4"
+          className="rounded-[24px] border border-white/10 bg-white/[0.04] px-5 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.18)]"
         >
-          <div className="grid gap-3 text-xs text-slate-300 sm:grid-cols-3">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Local view only</p>
+              <p className="mt-1 max-w-xl text-xs leading-5 text-slate-400">
+                These controls only change this pop-out window. They do not affect the main workbench.
+              </p>
+            </div>
+            <span className="rounded-full border border-sky-300/30 bg-sky-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-100">
+              Display
+            </span>
+          </div>
+          <div className="grid gap-4 text-xs text-slate-300 sm:grid-cols-3">
             <div>
               <p className="mb-2 font-semibold uppercase tracking-[0.16em] text-slate-400">
                 Display
@@ -225,9 +236,13 @@ export default function SubtitleMonitorPage() {
 
         <section className="flex flex-col gap-3">
           {visibleItems.length === 0 ? (
-            <article className="rounded-[24px] border border-dashed border-white/15 bg-white/[0.03] px-5 py-6 text-sm leading-6 text-slate-300">
-              Start realtime input in the main workbench and the latest subtitle
-              pair will appear here.
+            <article className="rounded-[28px] border border-dashed border-sky-200/20 bg-sky-200/[0.04] px-6 py-8 text-sm leading-6 text-slate-300">
+              <p className="text-base font-semibold text-white">
+                Waiting for subtitles
+              </p>
+              <p className="mt-2 max-w-lg text-slate-300">
+                Open the main workbench, start realtime input, then keep this window near your video.
+              </p>
             </article>
           ) : null}
 
