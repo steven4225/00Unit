@@ -2,6 +2,8 @@ import type { SubtitleItem } from "../schemas/transcript";
 
 export const SUBTITLE_MONITOR_CHANNEL_NAME = "subtitle-monitor";
 export const SUBTITLE_MONITOR_WINDOW_PATH = "/subtitle-monitor";
+export const SUBTITLE_MONITOR_WORKBENCH_HEARTBEAT_INTERVAL_MS = 2000;
+export const SUBTITLE_MONITOR_WORKBENCH_TIMEOUT_MS = 5000;
 
 export type SubtitleMonitorSessionId = string;
 
@@ -16,6 +18,7 @@ export type SubtitleMonitorSnapshot = {
 export type SubtitleMonitorMessage =
   | { type: "monitor-ready" }
   | { type: "request-snapshot" }
+  | { type: "workbench-heartbeat"; sessionId: SubtitleMonitorSessionId }
   | { type: "snapshot"; snapshot: SubtitleMonitorSnapshot }
   | {
       type: "session-reset";

@@ -20,6 +20,7 @@ import {
   type SubtitleMonitorMessage,
   type SubtitleMonitorSnapshot,
   SUBTITLE_MONITOR_CHANNEL_NAME,
+  SUBTITLE_MONITOR_WORKBENCH_HEARTBEAT_INTERVAL_MS,
   SUBTITLE_MONITOR_WINDOW_PATH
 } from "../lib/subtitle/subtitle-monitor-channel";
 import {
@@ -560,6 +561,13 @@ export function WorkbenchClient({
 
     const channel = new BroadcastChannel(SUBTITLE_MONITOR_CHANNEL_NAME);
     subtitleMonitorChannelRef.current = channel;
+    const heartbeatId = window.setInterval(() => {
+      channel.postMessage({
+        type: "workbench-heartbeat",
+        sessionId: subtitleMonitorSessionIdRef.current
+      } satisfies SubtitleMonitorMessage);
+    }, SUBTITLE_MONITOR_WORKBENCH_HEARTBEAT_INTERVAL_MS);
+
     channel.onmessage = (event: MessageEvent<unknown>) => {
       const message = event.data;
 
@@ -591,6 +599,7 @@ export function WorkbenchClient({
     };
 
     return () => {
+      window.clearInterval(heartbeatId);
       channel.close();
       if (subtitleMonitorChannelRef.current === channel) {
         subtitleMonitorChannelRef.current = null;
