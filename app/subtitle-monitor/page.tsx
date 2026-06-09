@@ -5,7 +5,8 @@ import {
   isSubtitleMonitorMessage,
   type SubtitleMonitorMessage,
   type SubtitleMonitorSnapshot,
-  SUBTITLE_MONITOR_CHANNEL_NAME
+  SUBTITLE_MONITOR_CHANNEL_NAME,
+  SUBTITLE_MONITOR_WORKBENCH_TIMEOUT_MS
 } from "../../lib/subtitle/subtitle-monitor-channel";
 
 const initialSnapshot: SubtitleMonitorSnapshot = {
@@ -38,7 +39,9 @@ export default function SubtitleMonitorPage() {
     useState<MonitorDisplayMode>("bilingual");
   const [textSize, setTextSize] = useState<MonitorTextSize>("comfort");
   const [visibleCount, setVisibleCount] = useState<MonitorVisibleCount>(2);
+  const [isWorkbenchDisconnected, setIsWorkbenchDisconnected] = useState(false);
   const activeSessionIdRef = useRef<string | null>(null);
+  const connectionTimeoutRef = useRef<number | null>(null);
   const visibleItems = snapshot.items.slice(-visibleCount);
   const showSourceText = displayMode === "bilingual" || displayMode === "source";
   const showChineseText =
@@ -50,6 +53,18 @@ export default function SubtitleMonitorPage() {
         ? "border-sky-300/70 bg-sky-300/20 text-white"
         : "border-white/10 bg-white/5 text-slate-300 hover:border-white/25 hover:bg-white/10"
     }`;
+  }
+
+  function noteWorkbenchActivity() {
+    setIsWorkbenchDisconnected(false);
+
+    if (connectionTimeoutRef.current !== null) {
+      window.clearTimeout(connectionTimeoutRef.current);
+    }
+
+    connectionTimeoutRef.current = window.setTimeout(() => {
+      setIsWorkbenchDisconnected(true);
+    }, SUBTITLE_MONITOR_WORKBENCH_TIMEOUT_MS);
   }
 
   useEffect(() => {
@@ -72,7 +87,20 @@ export default function SubtitleMonitorPage() {
         return;
       }
 
+      if (message.type === "workbench-heartbeat") {
+        if (
+          activeSessionIdRef.current !== null &&
+          activeSessionIdRef.current !== message.sessionId
+        ) {
+          return;
+        }
+
+        noteWorkbenchActivity();
+        return;
+      }
+
       if (message.type === "session-reset") {
+        noteWorkbenchActivity();
         activeSessionIdRef.current = message.sessionId;
         setSnapshot({
           sessionId: message.sessionId,
@@ -95,11 +123,15 @@ export default function SubtitleMonitorPage() {
         return;
       }
 
+      noteWorkbenchActivity();
       activeSessionIdRef.current = message.snapshot.sessionId;
       setSnapshot(message.snapshot);
     };
 
     return () => {
+      if (connectionTimeoutRef.current !== null) {
+        window.clearTimeout(connectionTimeoutRef.current);
+      }
       channel.close();
     };
   }, []);
@@ -118,15 +150,26 @@ export default function SubtitleMonitorPage() {
               </h1>
             </div>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">
-              {snapshot.statusDetail}
+              {isWorkbenchDisconnected ? "Disconnected" : snapshot.statusDetail}
             </span>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            {snapshot.isTranslating
-              ? "Receiving live subtitles and translation updates."
-              : "Waiting for the next subtitle update from the workbench."}
+            {isWorkbenchDisconnected
+              ? "This window has stopped receiving workbench updates."
+              : snapshot.isTranslating
+                ? "Receiving live subtitles and translation updates."
+                : "Waiting for the next subtitle update from the workbench."}
           </p>
         </header>
+
+        {isWorkbenchDisconnected ? (
+          <section className="rounded-[24px] border border-amber-300/30 bg-amber-300/10 px-5 py-4 text-sm leading-6 text-amber-50">
+            <p className="font-semibold">Workbench connection lost</p>
+            <p className="mt-1 text-amber-100/85">
+              Return to the main workbench or restart realtime input before trusting this subtitle window.
+            </p>
+          </section>
+        ) : null}
 
         <section
           aria-label="Subtitle monitor display controls"

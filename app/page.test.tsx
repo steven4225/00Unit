@@ -1003,6 +1003,106 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
   });
 
+  it("publishes subtitle monitor heartbeat messages while the workbench is mounted", () => {
+    render(<WorkbenchClient />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+    channel?.postMessage.mockClear();
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(channel?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "workbench-heartbeat"
+      })
+    );
+  });
+
+  it("marks the subtitle monitor disconnected after workbench updates stop", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "live-session",
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening",
+          isTranslating: false,
+          items: [
+            {
+              id: "live-item",
+              english: "current source text",
+              chinese: "当前译文",
+              status: "final"
+            }
+          ]
+        }
+      });
+    });
+
+    expect(screen.getByText("current source text")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+
+    expect(screen.getByText("Workbench connection lost")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Return to the main workbench or restart realtime input before trusting this subtitle window."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("ignores stale heartbeat messages when checking monitor connection freshness", () => {
+    render(<SubtitleMonitorPage />);
+
+    const channel = FakeBroadcastChannel.instances[0];
+
+    act(() => {
+      channel?.dispatch({
+        type: "snapshot",
+        snapshot: {
+          sessionId: "session-before-reset",
+          modeLabel: "Cloud ASR Tab Audio Mode",
+          statusDetail: "Listening",
+          isTranslating: false,
+          items: [
+            {
+              id: "before-reset-item",
+              english: "source before reset",
+              chinese: "重置前译文",
+              status: "final"
+            }
+          ]
+        }
+      });
+      channel?.dispatch({
+        type: "session-reset",
+        sessionId: "session-after-reset",
+        modeLabel: "Cloud ASR Tab Audio Mode",
+        statusDetail: "Standby"
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+      channel?.dispatch({
+        type: "workbench-heartbeat",
+        sessionId: "session-before-reset"
+      });
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(screen.getByText("Workbench connection lost")).toBeInTheDocument();
+    expect(screen.queryByText("source before reset")).not.toBeInTheDocument();
+  });
+
   it("shows an error when the subtitle monitor popup is blocked", () => {
     vi.stubGlobal("open", vi.fn(() => null));
 
